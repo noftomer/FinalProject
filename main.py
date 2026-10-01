@@ -5,6 +5,7 @@ Examples
     python main.py                      # train the LSTM with all defaults from src/config.py
     python main.py train --ticker ^GSPC
     python main.py predict --ticker ^GSPC
+    python main.py ablation --seeds 5   # compare feature sets across seeds
 """
 import argparse
 import json
@@ -130,8 +131,9 @@ def predict_next_day(cfg: Config) -> None:
 def main() -> None:
     """Parse command-line arguments, build the Config, and dispatch to train or predict."""
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("command", nargs="?", default="train", choices=["train", "predict"],
+    p.add_argument("command", nargs="?", default="train", choices=["train", "predict", "ablation"],
                    help="what to run (default: train)")
+    p.add_argument("--seeds", type=int, default=5, help="number of seeds per variant for ablation")
     p.add_argument("--ticker", default=Config.ticker)
     p.add_argument("--start", default=Config.start)
     p.add_argument("--end", default=None)
@@ -149,6 +151,9 @@ def main() -> None:
 
     if a.command == "train":
         train_and_evaluate(cfg, a.refresh)
+    elif a.command == "ablation":
+        from src.ablation import run_ablation
+        run_ablation(cfg, [cfg.seed + i for i in range(a.seeds)], a.refresh)
     else:
         predict_next_day(cfg)
 

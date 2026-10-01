@@ -1,0 +1,6 @@
+,return_rmse,return_rmse,rmse_vs_random_walk_%,rmse_vs_random_walk_%,directional_accuracy_%,directional_accuracy_%,majority_rate_%,majority_rate_%,p_value,p_value,strategy_sharpe,strategy_sharpe,buy_hold_sharpe,buy_hold_sharpe
+,mean,std,mean,std,mean,std,mean,std,mean,std,mean,std,mean,std
+variant,,,,,,,,,,,,,,
+returns_only,0.009814448654651642,,-0.093893793832589,,55.769230769230774,,55.769230769230774,,0.516688627914973,,1.103609459545073,,1.1038492248116074,
+returns+volume+calendar,0.0097885113209486,,-0.3579226870310537,,50.32051282051282,,55.769230769230774,,0.997222128217366,,0.456375932041141,,1.1038492248116074,
+all_16_features,0.009784643538296223,,-0.3972947514279346,,55.769230769230774,,55.769230769230774,,0.516688627914973,,1.103609459545073,,1.1038492248116074,
