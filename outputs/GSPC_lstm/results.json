@@ -1,0 +1,91 @@
+{
+  "config": {
+    "ticker": "^GSPC",
+    "start": "2010-01-01",
+    "end": null,
+    "data_dir": "C:\\Users\\tomer\\Documents\\FinalProject\\data",
+    "output_dir": "C:\\Users\\tomer\\Documents\\FinalProject\\outputs",
+    "window": 30,
+    "val_ratio": 0.15,
+    "test_ratio": 0.15,
+    "model": "lstm",
+    "hidden_size": 64,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "epochs": 100,
+    "batch_size": 64,
+    "lr": 0.001,
+    "weight_decay": 1e-05,
+    "patience": 15,
+    "seed": 42,
+    "features": [
+      "log_ret",
+      "log_ret_5",
+      "log_ret_20",
+      "sma_10_ratio",
+      "sma_50_ratio",
+      "ema_12_ratio",
+      "ema_26_ratio",
+      "rsi_14",
+      "macd",
+      "macd_signal",
+      "volatility_20",
+      "bb_position",
+      "hl_range",
+      "oc_change",
+      "volume_change",
+      "day_of_week"
+    ]
+  },
+  "model": {
+    "return_rmse": 0.00973991584032774,
+    "return_mae": 0.006629172246903181,
+    "price_rmse": 58.43783454196214,
+    "price_mape_%": 0.6631137851424129,
+    "directional_accuracy_%": 54.807692307692314
+  },
+  "direction_test": {
+    "hits": 342,
+    "n": 624,
+    "majority_rate_%": 55.769230769230774,
+    "p_value": 0.7002050183058902
+  },
+  "baselines": {
+    "random_walk (ret=0)": {
+      "return_rmse": 0.009823672473430634,
+      "return_mae": 0.006664771120995283,
+      "price_rmse": 58.87750156388524,
+      "price_mape_%": 0.666303872076633,
+      "directional_accuracy_%": NaN
+    },
+    "train_mean_drift": {
+      "return_rmse": 0.009804772213101387,
+      "return_mae": 0.006630512420088053,
+      "price_rmse": 58.76376039963909,
+      "price_mape_%": 0.6631798948134389,
+      "directional_accuracy_%": 55.769230769230774
+    },
+    "momentum (ret=yesterday)": {
+      "return_rmse": 0.014261170775646636,
+      "return_mae": 0.009857860646339697,
+      "price_rmse": 85.5767700192482,
+      "price_mape_%": 0.9852741702882479,
+      "directional_accuracy_%": 50.641025641025635
+    }
+  },
+  "backtest": {
+    "strategy": {
+      "total_return_%": 44.96357841917267,
+      "sharpe": 1.0977276296541134,
+      "max_drawdown_%": -17.151780918289006
+    },
+    "buy_and_hold": {
+      "total_return_%": 48.654258728027344,
+      "sharpe": 1.1038492248116074,
+      "max_drawdown_%": -18.902217864990234
+    },
+    "exposure_%": 71.7948717948718,
+    "n_trades": 91
+  },
+  "epochs_trained": 21
+}
