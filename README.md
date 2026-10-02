@@ -20,7 +20,7 @@ empirically with a leak-free methodology.
 
 ```
 FinalProject/
-├── main.py              # CLI: train | predict
+├── main.py              # CLI: train | predict | ablation
 ├── requirements.txt
 ├── src/
 │   ├── config.py        # all hyper-parameters (single source of truth)
@@ -29,13 +29,19 @@ FinalProject/
 │   ├── dataset.py       # chronological split, scaling, sliding windows
 │   ├── models.py        # LSTM regressor
 │   ├── train.py         # training loop, early stopping, seeding
-│   └── evaluate.py      # metrics, baselines, significance test, backtest, plots
+│   ├── evaluate.py      # metrics, baselines, significance test, backtest, plots
+│   └── ablation.py      # feature-set ablation across multiple seeds
 ├── data/                # cached price CSVs (auto-created)
-└── outputs/<TICKER>_lstm/
-    ├── results.json          # all metrics
-    ├── test_predictions.csv  # per-day predictions
-    ├── model.pt              # weights + scaler + config
-    └── *.png                 # loss curve, price plot, scatter, backtest
+└── outputs/
+    ├── <TICKER>_lstm/
+    │   ├── results.json          # all metrics
+    │   ├── test_predictions.csv  # per-day predictions
+    │   ├── model.pt              # weights + scaler + config
+    │   └── *.png                 # loss curve, price plot, scatter, backtest
+    └── ablation/
+        ├── ablation_runs.csv     # one row per (variant, seed)
+        ├── ablation_summary.csv  # mean and std per variant
+        └── ablation.png          # directional accuracy and Sharpe per variant
 ```
 
 ## 3. Quick start
@@ -52,8 +58,13 @@ python main.py train --ticker ^GSPC
 python main.py predict --ticker ^GSPC
 ```
 
+```bash
+python main.py ablation --ticker ^GSPC --seeds 5
+```
+
 Any Yahoo Finance ticker works (`AAPL`, `MSFT`, `^IXIC`, `TA35.TA`, `BTC-USD`, …).
-Other options: `--start`, `--end`, `--window`, `--epochs`, `--hidden`, `--layers`, `--lr`, `--seed`, `--refresh`.
+Other options: `--start`, `--end`, `--window`, `--epochs`, `--hidden`, `--layers`, `--lr`, `--seed`, `--refresh`,
+and `--seeds` (number of seeds per variant, used by `ablation`).
 
 ## 4. Methodology
 
@@ -107,7 +118,6 @@ ReduceLROnPlateau, and early stopping (patience 15). Seeds are fixed for reprodu
 | Mean drift ("always up") | 0.00982 | 0.664 | 56.0 | – | – |
 | Buy & hold | – | – | – | – | **1.11** |
 
-*(Your numbers may vary slightly with data updates. Rerun `python main.py train` to reproduce them.)*
 
 ### 5.1 Discussion
 - **The price chart can mislead.** The predicted-price line tracks the actual price very closely, with a MAPE
@@ -121,6 +131,39 @@ ReduceLROnPlateau, and early stopping (patience 15). Seeds are fixed for reprodu
 - **Conclusion:** the results are consistent with the weak-form EMH. Public price history and technical
   indicators contain little exploitable information about the next day's return of a highly liquid index.
   This negative result is a valid scientific finding, and it shows why honest baselines matter.
+
+### 5.2 Feature ablation
+
+`python main.py ablation` tests whether the technical indicators add anything. Each variant is trained with
+the same data, split, model, and seeds; only the input feature set changes. Rows with a missing value in any
+of the 16 features are dropped for every variant, so all variants share identical samples and test dates.
+Results are averaged over several seeds (`--seeds`, default 5, using `seed`, `seed+1`, …) because single runs
+differ by more than the effect being measured.
+
+| Variant | Features |
+|---|---|
+| `returns_only` | 1: daily log return |
+| `returns+volume+calendar` | 3: log return, log volume change, day of week |
+| `all_16_features` | 16: the full set from section 4.3 |
+
+For each run it reports return RMSE relative to the random walk, directional accuracy against the
+"always up" rate, p-value, and strategy Sharpe against buy & hold. Outputs are written to `outputs/ablation/`.
+
+**Committed results** (S&P 500, a single seed, 42; the model stopped after 3 epochs in every variant):
+
+| Variant | RMSE vs random walk | Direction acc. % | p-value | Strategy Sharpe |
+|---|---|---|---|---|
+| `returns_only` | -0.09% | 55.8 | 0.52 | 1.10 |
+| `returns+volume+calendar` | -0.36% | 50.3 | 1.00 | 0.46 |
+| `all_16_features` | -0.40% | 55.8 | 0.52 | 1.10 |
+| *Reference: "always up" / buy & hold* | – | 55.8 | – | 1.10 |
+
+- Adding features lowers return RMSE only marginally (at most 0.4% below the random walk).
+- Where direction accuracy and Sharpe equal the "always up" and buy & hold references, the model is most likely
+  predicting a positive return on nearly every day, so it is not showing skill. The 3-feature variant is the
+  only one that deviates, and it does worse.
+- With one seed the standard deviations are empty and these numbers cannot separate real effects from noise.
+  Run with `--seeds 5` or more to get mean ± std before drawing conclusions.
 
 ## 6. Limitations and future work
 - A single train/validation/test split was used. **Walk-forward (rolling) validation** would give more robust estimates.
