@@ -1,0 +1,80 @@
+{
+  "config": {
+    "ticker": "^GSPC",
+    "start": "2010-01-01",
+    "end": null,
+    "data_dir": "C:\\Users\\tomer\\Documents\\FinalProject\\data",
+    "output_dir": "C:\\Users\\tomer\\Documents\\FinalProject\\outputs",
+    "val_ratio": 0.15,
+    "test_ratio": 0.15,
+    "model": "ridge",
+    "n_lags": 5,
+    "alphas": [
+      0.1,
+      1,
+      10,
+      100,
+      1000,
+      10000,
+      100000
+    ]
+  },
+  "model": {
+    "return_rmse": 0.00977639130593826,
+    "return_mae": 0.006616923992505503,
+    "price_rmse": 58.5644230774925,
+    "price_mape_%": 0.6618397197715825,
+    "directional_accuracy_%": 55.714285714285715
+  },
+  "direction_test": {
+    "hits": 351,
+    "n": 630,
+    "majority_rate_%": 55.714285714285715,
+    "p_value": 0.5166010683184272
+  },
+  "baselines": {
+    "random_walk (ret=0)": {
+      "return_rmse": 0.009800064366485027,
+      "return_mae": 0.0066528718462262205,
+      "price_rmse": 58.701582309160486,
+      "price_mape_%": 0.6651263307064242,
+      "directional_accuracy_%": NaN
+    },
+    "train_mean_drift": {
+      "return_rmse": 0.009782177370317313,
+      "return_mae": 0.006618861853194893,
+      "price_rmse": 58.592553752521525,
+      "price_mape_%": 0.6620279351951425,
+      "directional_accuracy_%": 55.714285714285715
+    },
+    "momentum (ret=yesterday)": {
+      "return_rmse": 0.014219650722572209,
+      "return_mae": 0.009841934643510604,
+      "price_rmse": 85.28832754761255,
+      "price_mape_%": 0.9836926486828105,
+      "directional_accuracy_%": 50.476190476190474
+    }
+  },
+  "backtest": {
+    "strategy": {
+      "total_return_%": 47.029186011238465,
+      "sharpe": 1.0679819985774337,
+      "max_drawdown_%": -18.902206184283987
+    },
+    "buy_and_hold": {
+      "total_return_%": 47.04376456563673,
+      "sharpe": 1.06822490891107,
+      "max_drawdown_%": -18.902206184283997
+    },
+    "exposure_%": 100.0,
+    "n_trades": 1
+  },
+  "alpha": 100000,
+  "coefficients": {
+    "ret_lag0": -4.6769204853843374e-05,
+    "ret_lag1": 3.123361226882846e-05,
+    "ret_lag2": -1.084341077226658e-05,
+    "ret_lag3": -1.346039052056144e-05,
+    "ret_lag4": 1.5400902239450733e-06
+  }
+}

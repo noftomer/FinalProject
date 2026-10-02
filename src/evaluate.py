@@ -71,18 +71,11 @@ def backtest(y_true: np.ndarray, y_pred: np.ndarray, cost_bps: float = 1.0) -> d
             "_equity": (np.cumprod(1 + strat), np.cumprod(1 + simple))}
 
 
-def plot_all(out_dir: Path, history: dict, dates: pd.DatetimeIndex, y_true: np.ndarray,
+def plot_all(out_dir: Path, dates: pd.DatetimeIndex, y_true: np.ndarray,
              y_pred: np.ndarray, close: np.ndarray, equity: tuple[np.ndarray, np.ndarray],
              title: str) -> None:
-    """Save the loss curve, predicted-vs-actual price, return scatter, and backtest equity plots to ``out_dir``."""
+    """Save the predicted-vs-actual price, return scatter, and backtest equity plots to ``out_dir``."""
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(history["train_loss"], color=BLUE, label="train")
-    ax.plot(history["val_loss"], color=LIGHT_BLUE, label="validation")
-    ax.set(title=f"Learning curves — {title}", xlabel="epoch", ylabel="Huber loss")
-    ax.legend(); ax.grid(alpha=0.3); fig.tight_layout()
-    fig.savefig(out_dir / "loss_curve.png", dpi=150); plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(11, 4.5))
     ax.plot(dates, close * np.exp(y_true), color=GRAY, lw=1.2, label="actual next-day close")
@@ -92,12 +85,19 @@ def plot_all(out_dir: Path, history: dict, dates: pd.DatetimeIndex, y_true: np.n
     ax.legend(); ax.grid(alpha=0.3); fig.tight_layout()
     fig.savefig(out_dir / "price_prediction.png", dpi=150); plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    fig, (ax, ax_zoom) = plt.subplots(1, 2, figsize=(11, 5.5))
     ax.scatter(y_true * 100, y_pred * 100, s=6, alpha=0.5, color=BLUE)
     lim = np.abs(y_true).max() * 100
     ax.plot([-lim, lim], [-lim, lim], color=GRAY, ls="--", lw=1)
     ax.axhline(0, color=GRAY, lw=0.5); ax.axvline(0, color=GRAY, lw=0.5)
     ax.set(title="Predicted vs actual return (%)", xlabel="actual", ylabel="predicted")
+
+    # Zoomed view: y-axis autoscaled with many decimals, so near-zero predictions are visibly not exactly 0
+    ax_zoom.scatter(y_true * 100, y_pred * 100, s=6, alpha=0.5, color=BLUE)
+    ax_zoom.axhline(0, color=GRAY, lw=0.5)
+    ax_zoom.yaxis.set_major_formatter(plt.FormatStrFormatter("%.5f"))
+    ax_zoom.set(title="Zoom on predictions (y-axis autoscaled)", xlabel="actual", ylabel="predicted (%)")
+    ax_zoom.grid(alpha=0.3)
     fig.tight_layout(); fig.savefig(out_dir / "return_scatter.png", dpi=150); plt.close(fig)
 
     strat_eq, bh_eq = equity

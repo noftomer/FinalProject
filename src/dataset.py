@@ -1,84 +1,47 @@
-"""Turn the feature table into leak-free sliding-window tensors."""
+"""Chronological train/validation/test split with a scaler fitted on training data only."""
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-import torch
 from sklearn.preprocessing import StandardScaler
-from torch.utils.data import DataLoader, TensorDataset
 
 
 @dataclass
 class Split:
-    X: np.ndarray          # (n, window, n_features)
-    y: np.ndarray          # (n,) next-day log return
+    X: np.ndarray            # (n, n_features) lagged returns, scaled
+    y: np.ndarray            # (n,) next-day log return
     dates: pd.DatetimeIndex  # date of the last observed day (prediction made at its close)
-    close: np.ndarray      # close price on that date (to rebuild predicted price)
+    close: np.ndarray        # close price on that date (to rebuild predicted price)
 
 
 @dataclass
 class Prepared:
-    train: Split              # training split (windows, labels, dates, close)
-    val: Split                # validation split
-    test: Split               # test split
-    x_scaler: StandardScaler  # fitted feature scaler (to transform new data the same way)
-    y_scale: float            # target std used to rescale labels/predictions
+    train: Split
+    val: Split
+    test: Split
+    x_scaler: StandardScaler  # fitted on the training split
 
 
-def _windows(feats: np.ndarray, window: int, idx: np.ndarray) -> np.ndarray:
-    """Build sliding windows: for each index in ``idx``, stack the ``window`` rows ending at that index."""
-    return np.stack([feats[i - window + 1: i + 1] for i in idx])
+def _split(df: pd.DataFrame, features: list[str], x_scaler: StandardScaler) -> Split:
+    """Turn a slice of the feature table into a Split."""
+    return Split(x_scaler.transform(df[features].values), df["target"].values,
+                 df.index, df["Close"].values)
 
 
-def _make(feats: np.ndarray, window: int, rows: np.ndarray, labeled: pd.DataFrame, sl: slice) -> Split:
-    """Assemble one Split (windows, targets, dates, close prices) for the slice ``sl`` of the data."""
-    r = rows[sl]
-    lab = labeled.iloc[sl]    
-    windows=_windows(feats, window, r)
-    target=lab["target"].values.astype(np.float32)
-    indexes= lab.index
-    close=lab["Close"].values
-    return Split(windows,target ,
-                indexes, close)
+def prepare(df: pd.DataFrame, features: list[str], val_ratio: float, test_ratio: float) -> Prepared:
+    """Split labeled rows chronologically into train/val/test; the scaler never sees val or test data."""
+    labeled = df.dropna(subset=features + ["target"])
+    n = len(labeled)
+    n_test, n_val = int(n * test_ratio), int(n * val_ratio)
+    n_train = n - n_val - n_test
+
+    x_scaler = StandardScaler().fit(labeled[features].values[:n_train])
+    return Prepared(_split(labeled.iloc[:n_train], features, x_scaler),
+                    _split(labeled.iloc[n_train:n_train + n_val], features, x_scaler),
+                    _split(labeled.iloc[n_train + n_val:], features, x_scaler),
+                    x_scaler)
 
 
-def prepare(df: pd.DataFrame, features: list[str], window: int,val_ratio: float, test_ratio: float) -> Prepared:
-    """Split the feature table chronologically into train/val/test windows, fitting scalers on train only to avoid leakage."""
-    df = df.dropna(subset=features)
-    labeled = df.dropna(subset=["target"])   
-    n = len(labeled)                         
-    n_test = int(n * test_ratio)             
-    n_val = int(n * val_ratio)               
-    n_train = n - n_val - n_test             
-    train_end = labeled.index[n_train - 1]   
-
-    x_scaler = StandardScaler()
-    x_scaler.fit(df.loc[:train_end, features].values)
-    feats = x_scaler.transform(df[features].values).astype(np.float32)   
-    y_scale = float(labeled["target"].iloc[:n_train].std())  
-
-    pos = {d: i for i, d in enumerate(df.index)}      
-    rows = np.array([pos[d] for d in labeled.index]) 
-    valid = rows >= window - 1                        
-    rows = rows[valid]                                
-    labeled = labeled[valid]                          
-    n_train -= int((~valid).sum())                   
-
-    train = _make(feats, window, rows, labeled, slice(0, n_train))                    
-    val = _make(feats, window, rows, labeled, slice(n_train, n_train + n_val))        
-    test = _make(feats, window, rows, labeled, slice(n_train + n_val, None))          
-    return Prepared(train, val, test, x_scaler, y_scale)
-
-
-def last_window(df: pd.DataFrame, features: list[str], window: int,
-                x_scaler: StandardScaler) -> np.ndarray:
-    """Most recent window (including the latest day, which has no label yet)."""
-    df = df.dropna(subset=features) 
-    feats = x_scaler.transform(df[features].values[-window:]).astype(np.float32) 
-    return feats[None]# adds a new axis at the front of the array
-
-
-def loader(split: Split, y_scale: float, batch_size: int, shuffle: bool) -> DataLoader:
-    """Wrap a Split into a torch DataLoader, converting arrays to tensors and normalizing targets by ``y_scale``."""
-    ds = TensorDataset(torch.from_numpy(split.X), torch.from_numpy(split.y / y_scale))  
-    return DataLoader(ds, batch_size=batch_size, shuffle=shuffle)  
+def last_row(df: pd.DataFrame, features: list[str], x_scaler: StandardScaler) -> np.ndarray:
+    """Features of the most recent day (which has no label yet), scaled and shaped (1, n_features)."""
+    return x_scaler.transform(df.dropna(subset=features)[features].values[-1:])

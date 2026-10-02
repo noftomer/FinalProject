@@ -2,55 +2,45 @@
 
 Examples
 --------
-    python main.py                      # train the LSTM with all defaults from src/config.py
+    python main.py                      # train with all defaults from src/config.py
     python main.py train --ticker ^GSPC
     python main.py predict --ticker ^GSPC
-    python main.py ablation --seeds 5   # compare feature sets across seeds
 """
 import argparse
 import json
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
-import torch
 
 from src.config import Config
 from src.data import load_prices
-from src.dataset import last_window, loader, prepare
+from src.dataset import last_row, prepare
 from src.evaluate import (backtest, baselines, direction_significance, plot_all,
                           regression_metrics)
-from src.features import add_features
-from src.models import build_model
-from src.train import fit, predict, set_seed
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from src.features import add_features, feature_names
+from src.train import fit
 
 
 def run_dir(cfg: Config) -> Path:
-    """Output directory for this ticker/model combination (e.g. outputs/GSPC_lstm)."""
+    """Output directory for this ticker/model combination (e.g. outputs/GSPC_ridge)."""
     return cfg.output_dir / f"{cfg.ticker.replace('^', '')}_{cfg.model}"
 
 
 def train_and_evaluate(cfg: Config, refresh: bool = False) -> dict:
     """Train the model, evaluate it on the test split against baselines, and save plots, metrics and the checkpoint."""
-    set_seed(cfg.seed)
-    df = add_features(load_prices(cfg.ticker, cfg.start, cfg.end, cfg.data_dir, refresh))
-    data = prepare(df, cfg.features, cfg.window, cfg.val_ratio, cfg.test_ratio)
+    features = feature_names(cfg.n_lags)
+    df = add_features(load_prices(cfg.ticker, cfg.start, cfg.end, cfg.data_dir, refresh), cfg.n_lags)
+    data = prepare(df, features, cfg.val_ratio, cfg.test_ratio)
     print(f"[{cfg.ticker} | {cfg.model}] samples: train={len(data.train.y)} "
           f"val={len(data.val.y)} test={len(data.test.y)} | "
           f"test period {data.test.dates[0].date()} -> {data.test.dates[-1].date()}")
 
-    model = build_model(len(cfg.features), cfg.hidden_size, cfg.num_layers, cfg.dropout)
-    loader_train=loader(data.train, data.y_scale, cfg.batch_size, shuffle=True)
-    loader_val=loader(data.val, data.y_scale, cfg.batch_size, shuffle=False)
-    history = fit(model,
-                  loader_train,
-                  loader_val,
-                  cfg.epochs, cfg.lr, cfg.weight_decay, cfg.patience, DEVICE)
+    model, alpha = fit(data.train.X, data.train.y, data.val.X, data.val.y, cfg.alphas)
 
     t = data.test
-    y_pred = predict(model, t.X, data.y_scale, DEVICE)
+    y_pred = model.predict(t.X)
     prev_ret = df.loc[t.dates, "log_ret"].values
     bt = backtest(t.y, y_pred)
     equity = bt.pop("_equity")
@@ -59,7 +49,6 @@ def train_and_evaluate(cfg: Config, refresh: bool = False) -> dict:
     model_metrics = regression_metrics(t.y, y_pred, t.close)
     direction_test = direction_significance(t.y, y_pred)
     baseline_metrics = baselines(t.y, prev_ret, float(data.train.y.mean()), t.close)
-    epochs_trained = len(history["train_loss"])
 
     results = {
         "config": config,
@@ -67,17 +56,17 @@ def train_and_evaluate(cfg: Config, refresh: bool = False) -> dict:
         "direction_test": direction_test,
         "baselines": baseline_metrics,
         "backtest": bt,
-        "epochs_trained": epochs_trained,
+        "alpha": alpha,
+        "coefficients": dict(zip(features, model.coef_.tolist())),
     }
 
     out = run_dir(cfg)
     out.mkdir(parents=True, exist_ok=True)
-    plot_all(out, history, t.dates, t.y, y_pred, t.close, equity, f"{cfg.ticker} {cfg.model.upper()}")
+    plot_all(out, t.dates, t.y, y_pred, t.close, equity, f"{cfg.ticker} {cfg.model.upper()}")
     pd.DataFrame({"date": t.dates, "close": t.close, "actual_next_ret": t.y,
                   "pred_next_ret": y_pred}).to_csv(out / "test_predictions.csv", index=False)
     (out / "results.json").write_text(json.dumps(results, indent=2))
-    torch.save({"state_dict": model.state_dict(), "config": cfg.to_dict(),
-                "x_scaler": data.x_scaler, "y_scale": data.y_scale}, out / "model.pt")
+    joblib.dump({"model": model, "config": cfg.to_dict(), "x_scaler": data.x_scaler}, out / "model.joblib")
 
     print_report(results)
     print(f"\nArtifacts saved to {out}")
@@ -103,20 +92,16 @@ def print_report(r: dict) -> None:
 
 def predict_next_day(cfg: Config) -> None:
     """Load the saved model and forecast the next trading day's return, close price and direction."""
-    ckpt_path = run_dir(cfg) / "model.pt"
+    ckpt_path = run_dir(cfg) / "model.joblib"
     if not ckpt_path.exists():
         raise SystemExit(f"No trained model at {ckpt_path}. Run `python main.py train` first.")
-    ckpt = torch.load(ckpt_path, weights_only=False, map_location=DEVICE)
+    ckpt = joblib.load(ckpt_path)
     saved = ckpt["config"]
 
     # Always pull fresh data up to today for a live prediction.
-    df = add_features(load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=True))
-    model = build_model(len(saved["features"]), saved["hidden_size"],
-                        saved["num_layers"], saved["dropout"]).to(DEVICE)
-    model.load_state_dict(ckpt["state_dict"])
-
-    X = last_window(df, saved["features"], saved["window"], ckpt["x_scaler"])
-    ret = float(predict(model, X, ckpt["y_scale"], DEVICE)[0])
+    df = add_features(load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=True), saved["n_lags"])
+    X = last_row(df, feature_names(saved["n_lags"]), ckpt["x_scaler"])
+    ret = float(ckpt["model"].predict(X)[0])
     last_date, last_close = df.index[-1], float(df["Close"].iloc[-1])
     next_date = last_date + pd.offsets.BDay(1)
 
@@ -131,29 +116,19 @@ def predict_next_day(cfg: Config) -> None:
 def main() -> None:
     """Parse command-line arguments, build the Config, and dispatch to train or predict."""
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("command", nargs="?", default="train", choices=["train", "predict", "ablation"],
+    p.add_argument("command", nargs="?", default="train", choices=["train", "predict"],
                    help="what to run (default: train)")
-    p.add_argument("--seeds", type=int, default=5, help="number of seeds per variant for ablation")
     p.add_argument("--ticker", default=Config.ticker)
     p.add_argument("--start", default=Config.start)
     p.add_argument("--end", default=None)
-    p.add_argument("--window", type=int, default=Config.window)
-    p.add_argument("--epochs", type=int, default=Config.epochs)
-    p.add_argument("--hidden", type=int, default=Config.hidden_size)
-    p.add_argument("--layers", type=int, default=Config.num_layers)
-    p.add_argument("--lr", type=float, default=Config.lr)
-    p.add_argument("--seed", type=int, default=Config.seed)
+    p.add_argument("--lags", type=int, default=Config.n_lags, help="past daily returns used as input")
     p.add_argument("--refresh", action="store_true", help="re-download data instead of using cache")
     a = p.parse_args()
 
-    cfg = Config(ticker=a.ticker, start=a.start, end=a.end, window=a.window,
-                 epochs=a.epochs, hidden_size=a.hidden, num_layers=a.layers, lr=a.lr, seed=a.seed)
+    cfg = Config(ticker=a.ticker, start=a.start, end=a.end, n_lags=a.lags)
 
     if a.command == "train":
         train_and_evaluate(cfg, a.refresh)
-    elif a.command == "ablation":
-        from src.ablation import run_ablation
-        run_ablation(cfg, [cfg.seed + i for i in range(a.seeds)], a.refresh)
     else:
         predict_next_day(cfg)
 
