@@ -30,6 +30,12 @@ def _windows(x: np.ndarray, seq_len: int) -> np.ndarray:
     return sliding_window_view(x, seq_len, axis=0).transpose(0, 2, 1)
 
 
+def _split(X: np.ndarray, ends: pd.DataFrame, lo: int, hi: int) -> Split:
+    """Build a Split from the window/label rows in ``[lo, hi)``."""
+    rows = ends.iloc[lo:hi]
+    return Split(X[lo:hi], rows["target"].values, rows.index, rows["Close"].values)
+
+
 def prepare(df: pd.DataFrame, seq_len: int, val_ratio: float, test_ratio: float) -> Prepared:
     """Split labeled windows chronologically into train/val/test; the scaler never sees val or test rows.
 
@@ -46,11 +52,8 @@ def prepare(df: pd.DataFrame, seq_len: int, val_ratio: float, test_ratio: float)
     x_scaler = StandardScaler().fit(x[:seq_len - 1 + n_train])
     X = _windows(x_scaler.transform(x), seq_len)[:n]
 
-    def split(lo: int, hi: int) -> Split:
-        rows = ends.iloc[lo:hi]
-        return Split(X[lo:hi], rows["target"].values, rows.index, rows["Close"].values)
-
-    return Prepared(split(0, n_train), split(n_train, n_train + n_val), split(n_train + n_val, n), x_scaler)
+    return Prepared(_split(X, ends, 0, n_train), _split(X, ends, n_train, n_train + n_val),
+                    _split(X, ends, n_train + n_val, n), x_scaler)
 
 
 def last_window(df: pd.DataFrame, seq_len: int, x_scaler: StandardScaler) -> np.ndarray:

@@ -10,6 +10,13 @@ from src.config import Config
 from src.models import LSTMRegressor, build_model
 
 
+def _tensors(X: np.ndarray, y: np.ndarray, device: torch.device,
+             y_mean: float, y_std: float) -> tuple[torch.Tensor, torch.Tensor]:
+    """Move features/standardized targets onto ``device`` as float32 tensors."""
+    return (torch.tensor(X, dtype=torch.float32, device=device),
+            torch.as_tensor((y - y_mean) / y_std, dtype=torch.float32, device=device))
+
+
 def fit(X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray,
         cfg: Config) -> tuple[LSTMRegressor, dict]:
     """Return the model from the epoch with the lowest validation MSE, plus the training history."""
@@ -21,12 +28,8 @@ def fit(X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.n
     model.y_mean.fill_(y_mean)
     model.y_std.fill_(y_std)
 
-    def tensors(X, y):
-        return (torch.tensor(X, dtype=torch.float32, device=device),
-                torch.as_tensor((y - y_mean) / y_std, dtype=torch.float32, device=device))
-
-    Xt, yt = tensors(X_train, y_train)
-    Xv, yv = tensors(X_val, y_val)
+    Xt, yt = _tensors(X_train, y_train, device, y_mean, y_std)
+    Xv, yv = _tensors(X_val, y_val, device, y_mean, y_std)
     loader = DataLoader(TensorDataset(Xt, yt), batch_size=cfg.batch_size, shuffle=True,
                         generator=torch.Generator().manual_seed(cfg.seed))
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
