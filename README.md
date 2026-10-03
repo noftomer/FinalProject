@@ -50,7 +50,7 @@ Other options: `--start`, `--end`, `--lags` (number of past daily returns used, 
 ## 4. Methodology
 
 ### 4.1 Data
-Daily adjusted OHLCV data from Yahoo Finance, 2010 until today by default.
+Daily adjusted OHLCV data from Yahoo Finance (2010 until today by default).
 
 ### 4.2 Target
 The model predicts the **next-day log return** `r(t+1) = ln(Close(t+1) / Close(t))`, not the raw price.
@@ -79,7 +79,7 @@ Ridge regression (linear regression with an L2 penalty). Alpha is picked from a 
 5. A **trading backtest**: go long when the predicted return is positive and stay flat otherwise, with 1 bp
    transaction cost. It reports total return, Sharpe ratio, and max drawdown compared with buy & hold.
 
-## 5. Results (S&P 500, test period Mar 2024 – Sep 2026, 630 days)
+## 5. Results (S&P 500, test period Mar 2024 – Sep 2026, 630 days according to sep 2026)
 
 | Model | Return RMSE | Price MAPE % | Direction acc. % | p-value | Strategy Sharpe |
 |---|---|---|---|---|---|
