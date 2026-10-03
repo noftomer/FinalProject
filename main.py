@@ -1,4 +1,4 @@
-"""Next-day stock market prediction — command-line entry point.
+"""Next-day stock price prediction with a PyTorch LSTM — command-line entry point.
 
 Examples
 --------
@@ -10,63 +10,55 @@ import argparse
 import json
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
+import torch
 
 from src.config import Config
 from src.data import load_prices
-from src.dataset import last_row, prepare
-from src.evaluate import (backtest, baselines, direction_significance, plot_all,
-                          regression_metrics)
-from src.features import add_features, feature_names
+from src.dataset import last_window, prepare
+from src.evaluate import direction_significance, plot_all, regression_metrics
+from src.features import add_features
+from src.models import build_model
 from src.train import fit
 
-
 def run_dir(cfg: Config) -> Path:
-    """Output directory for this ticker/model combination (e.g. outputs/GSPC_ridge)."""
+    """Output directory for this ticker/model combination (e.g. outputs/GSPC_lstm)."""
     return cfg.output_dir / f"{cfg.ticker.replace('^', '')}_{cfg.model}"
 
 
 def train_and_evaluate(cfg: Config, refresh: bool = False) -> dict:
-    """Train the model, evaluate it on the test split against baselines, and save plots, metrics and the checkpoint."""
-    features = feature_names(cfg.n_lags)
-    df = add_features(load_prices(cfg.ticker, cfg.start, cfg.end, cfg.data_dir, refresh), cfg.n_lags)
-    data = prepare(df, features, cfg.val_ratio, cfg.test_ratio)
+    """Train the model, evaluate it on the test split, and save plots, metrics and the checkpoint."""
+    df = add_features(load_prices(cfg.ticker, cfg.start, cfg.end, cfg.data_dir, refresh))
+    data = prepare(df, cfg.seq_len, cfg.val_ratio, cfg.test_ratio)
     print(f"[{cfg.ticker} | {cfg.model}] samples: train={len(data.train.y)} "
           f"val={len(data.val.y)} test={len(data.test.y)} | "
           f"test period {data.test.dates[0].date()} -> {data.test.dates[-1].date()}")
 
-    model, alpha = fit(data.train.X, data.train.y, data.val.X, data.val.y, cfg.alphas)
+    model, history = fit(data.train.X, data.train.y, data.val.X, data.val.y, cfg)
 
     t = data.test
     y_pred = model.predict(t.X)
-    prev_ret = df.loc[t.dates, "log_ret"].values
-    bt = backtest(t.y, y_pred)
-    equity = bt.pop("_equity")
 
     config = cfg.to_dict()
     model_metrics = regression_metrics(t.y, y_pred, t.close)
     direction_test = direction_significance(t.y, y_pred)
-    baseline_metrics = baselines(t.y, prev_ret, float(data.train.y.mean()), t.close)
 
     results = {
         "config": config,
         "model": model_metrics,
         "direction_test": direction_test,
-        "baselines": baseline_metrics,
-        "backtest": bt,
-        "alpha": alpha,
-        "coefficients": dict(zip(features, model.coef_.tolist())),
+        "history": history,
     }
 
     out = run_dir(cfg)
     out.mkdir(parents=True, exist_ok=True)
-    plot_all(out, t.dates, t.y, y_pred, t.close, equity, f"{cfg.ticker} {cfg.model.upper()}")
+    plot_all(out, t.dates, t.y, y_pred, t.close, history, f"{cfg.ticker} {cfg.model.upper()}")
     pd.DataFrame({"date": t.dates, "close": t.close, "actual_next_ret": t.y,
                   "pred_next_ret": y_pred}).to_csv(out / "test_predictions.csv", index=False)
     (out / "results.json").write_text(json.dumps(results, indent=2))
-    joblib.dump({"model": model, "config": cfg.to_dict(), "x_scaler": data.x_scaler}, out / "model.joblib")
+    torch.save({"state_dict": model.state_dict(), "config": cfg.to_dict(), "x_scaler": data.x_scaler},
+               out / "model.pt")
 
     print_report(results)
     print(f"\nArtifacts saved to {out}")
@@ -74,34 +66,31 @@ def train_and_evaluate(cfg: Config, refresh: bool = False) -> dict:
 
 
 def print_report(r: dict) -> None:
-    """Print test-set metrics, the direction significance test, and backtest results to the console."""
-    rows = {"MODEL": r["model"], **r["baselines"]}
-    table = pd.DataFrame(rows).T[["return_rmse", "return_mae", "price_rmse",
-                                  "price_mape_%", "directional_accuracy_%"]]
+    """Print test-set metrics, and the direction significance test to the console."""
+    table = pd.DataFrame({"MODEL": r["model"]}).T[["return_rmse", "return_mae", "price_rmse",
+                                                   "price_mape_%", "directional_accuracy_%"]]
     print("\n=== Test-set metrics ===")
     print(table.to_string(float_format=lambda v: f"{v:.5f}"))
     d = r["direction_test"]
     print(f"\nDirection: {d['hits']}/{d['n']} correct; majority-class rate "
           f"{d['majority_rate_%']:.1f}%; binomial p-value = {d['p_value']:.4f}")
-    b = r["backtest"]
-    print("\n=== Backtest (long/flat, 1 bp cost) ===")
-    print(pd.DataFrame({k: b[k] for k in ("strategy", "buy_and_hold")}).T
-          .to_string(float_format=lambda v: f"{v:.2f}"))
-    print(f"exposure {b['exposure_%']:.1f}% | trades {b['n_trades']}")
 
 
 def predict_next_day(cfg: Config) -> None:
     """Load the saved model and forecast the next trading day's return, close price and direction."""
-    ckpt_path = run_dir(cfg) / "model.joblib"
+    ckpt_path = run_dir(cfg) / "model.pt"
     if not ckpt_path.exists():
         raise SystemExit(f"No trained model at {ckpt_path}. Run `python main.py train` first.")
-    ckpt = joblib.load(ckpt_path)
+    ckpt = torch.load(ckpt_path, weights_only=False)
     saved = ckpt["config"]
+    model = build_model(ckpt["x_scaler"].n_features_in_, saved["hidden_size"], saved["num_layers"], saved["dropout"])
+    model.load_state_dict(ckpt["state_dict"])
+    model.eval()
 
     # Always pull fresh data up to today for a live prediction.
-    df = add_features(load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=True), saved["n_lags"])
-    X = last_row(df, feature_names(saved["n_lags"]), ckpt["x_scaler"])
-    ret = float(ckpt["model"].predict(X)[0])
+    df = add_features(load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=True))
+    X = last_window(df, saved["seq_len"], ckpt["x_scaler"])
+    ret = float(model.predict(X)[0])
     last_date, last_close = df.index[-1], float(df["Close"].iloc[-1])
     next_date = last_date + pd.offsets.BDay(1)
 
@@ -121,11 +110,12 @@ def main() -> None:
     p.add_argument("--ticker", default=Config.ticker)
     p.add_argument("--start", default=Config.start)
     p.add_argument("--end", default=None)
-    p.add_argument("--lags", type=int, default=Config.n_lags, help="past daily returns used as input")
+    p.add_argument("--seq-len", type=int, default=Config.seq_len, help="past trading days the LSTM sees")
+    p.add_argument("--epochs", type=int, default=Config.epochs, help="maximum training epochs")
     p.add_argument("--refresh", action="store_true", help="re-download data instead of using cache")
     a = p.parse_args()
 
-    cfg = Config(ticker=a.ticker, start=a.start, end=a.end, n_lags=a.lags)
+    cfg = Config(ticker=a.ticker, start=a.start, end=a.end, seq_len=a.seq_len, epochs=a.epochs)
 
     if a.command == "train":
         train_and_evaluate(cfg, a.refresh)

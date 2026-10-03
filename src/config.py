@@ -1,5 +1,5 @@
 """Experiment configuration. Every hyper-parameter lives here so runs are reproducible."""
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,11 +18,20 @@ class Config:
     val_ratio: float = 0.15          # fraction of data reserved for validation
     test_ratio: float = 0.15         # fraction of data reserved for testing
 
-    # Model: Ridge regression on the last `n_lags` daily log returns
-    model: str = "ridge"             # used to name the output directory
-    n_lags: int = 5                  # how many past daily returns the model sees
-    alphas: list[float] = field(default_factory=lambda: [0.1, 1, 10, 100, 1000, 10000, 100000])
-    # regularization strengths to try; the best one on validation data is kept
+    # Model: LSTM (PyTorch) over the last `seq_len` days of features (see features.py)
+    model: str = "lstm"              # used to name the output directory
+    seq_len: int = 20                # length of the input window (trading days)
+    hidden_size: int = 64            # LSTM hidden units per layer
+    num_layers: int = 2              # stacked LSTM layers
+    dropout: float = 0.2             # dropout before the output layer (and between layers if stacked)
+
+    # Training
+    lr: float = 1e-3                 # Adam learning rate
+    weight_decay: float = 1e-4       # L2 penalty
+    batch_size: int = 64
+    epochs: int = 100                # upper bound; early stopping usually ends sooner
+    patience: int = 10               # stop after this many epochs without validation improvement
+    seed: int = 42                   # for reproducible weight initialization and batch order
 
     def to_dict(self) -> dict:
         """Serialize the config to a plain dict (e.g. for logging or saving to JSON)."""
