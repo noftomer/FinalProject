@@ -33,20 +33,26 @@ def fit(X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.n
     loader = DataLoader(TensorDataset(Xt, yt), batch_size=cfg.batch_size, shuffle=True,
                         generator=torch.Generator().manual_seed(cfg.seed))
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    loss_fn = nn.MSELoss()
+    train_loss_fn = nn.HuberLoss(delta=cfg.huber_delta)   # robust objective used for the gradient step
+    loss_fn = nn.MSELoss()                                # reported/early-stopping metric
+
+    # Baseline: always predict the training mean (z = 0). A model must beat this to have learned anything.
+    baseline_val = float((yv ** 2).mean())
+    print(f"Baseline val MSE (predict train mean): {baseline_val:.4f}")
 
     best_state, best_val, best_epoch = None, float("inf"), 0
-    history = {"train_loss": [], "val_loss": []}
+    history = {"train_loss": [], "val_loss": [], "baseline_val_loss": baseline_val}
     for epoch in range(1, cfg.epochs + 1):
         model.train()
         total = 0.0
         for xb, yb in loader:
             opt.zero_grad()
-            loss = loss_fn(model(xb), yb)
+            pred = model(xb)
+            loss = train_loss_fn(pred, yb)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
-            total += loss.item() * len(xb)
+            total += loss_fn(pred.detach(), yb).item() * len(xb)   # log MSE so train/val curves are comparable
         model.eval()
         with torch.no_grad():
             val = loss_fn(model(Xv), yv).item()
@@ -61,6 +67,6 @@ def fit(X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.n
             break
 
     model.load_state_dict(best_state)
-    print(f"Best epoch: {best_epoch} (val loss {best_val:.4f})")
+    print(f"Best epoch: {best_epoch} (val loss {best_val:.4f} vs baseline {baseline_val:.4f})")
     history["best_epoch"] = best_epoch
     return model.eval(), history

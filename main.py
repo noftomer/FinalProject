@@ -3,8 +3,8 @@
 Examples
 --------
     python main.py                      # train with all defaults from src/config.py
-    python main.py train --ticker ^GSPC
-    python main.py predict --ticker ^GSPC
+    python main.py train --ticker AAPL
+    python main.py predict --ticker AAPL
 """
 import argparse
 import json
@@ -23,7 +23,7 @@ from src.models import build_model
 from src.train import fit
 
 def run_dir(cfg: Config) -> Path:
-    """Output directory for this ticker/model combination (e.g. outputs/GSPC_lstm)."""
+    """Output directory for this ticker/model combination (e.g. outputs/AAPL_lstm)."""
     return cfg.output_dir / f"{cfg.ticker.replace('^', '')}_{cfg.model}"
 
 

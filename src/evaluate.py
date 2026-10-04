@@ -47,6 +47,8 @@ def plot_all(out_dir: Path, dates: pd.DatetimeIndex, y_true: np.ndarray,
     ax.plot(epochs, history["train_loss"], color=BLUE, label="train loss")
     ax.plot(epochs, history["val_loss"], color=LIGHT_BLUE, label="validation loss")
     ax.axvline(history["best_epoch"], color=GRAY, ls="--", lw=1, label="best epoch")
+    if "baseline_val_loss" in history:
+        ax.axhline(history["baseline_val_loss"], color=GRAY, ls=":", lw=1, label="baseline (predict train mean)")
     ax.set(title=f"Training and validation loss (MSE) — {title}", xlabel="epoch", ylabel="loss")
     ax.legend(); ax.grid(alpha=0.3); fig.tight_layout()
     fig.savefig(out_dir / "loss_curve.png", dpi=150); plt.close(fig)

@@ -1,7 +1,7 @@
 # Next-Day Stock Price Prediction (PyTorch LSTM)
 
 Forecasts the **next trading day's return and closing price** of a stock or index with an LSTM
-(PyTorch) trained on the last 20 days of returns, volume and technical indicators, and evaluates it on a held-out test period.
+(PyTorch) trained on the last 40 days of returns, volume and technical indicators, and evaluates it on a held-out test period.
 
 > Academic use only. This is not financial advice.
 
@@ -31,12 +31,12 @@ FinalProject/
 
 ```bash
 pip install -r requirements.txt
-python main.py train --ticker ^GSPC
-python main.py predict --ticker ^GSPC
+python main.py train --ticker AAPL
+python main.py predict --ticker AAPL
 ```
 
 Any Yahoo Finance ticker works (`AAPL`, `MSFT`, `^IXIC`, `TA35.TA`, `BTC-USD`, …).
-Other options: `--start`, `--end`, `--seq-len` (input window length, default 20), `--epochs`, `--refresh`.
+Other options: `--start`, `--end`, `--seq-len` (input window length, default 40), `--epochs`, `--refresh`.
 Model and training hyper-parameters (hidden size, layers, dropout, learning rate, …) are in `src/config.py`.
 
 ## 3. Methodology
@@ -68,15 +68,11 @@ stopping (patience 10). The best-validation epoch's weights are kept. A fixed se
 2. **Directional accuracy**: the share of days where the sign of the predicted return was correct.
 3. A **binomial test** of whether directional accuracy beats always guessing the majority class.
 
-## 4. Results (S&P 500, test period Apr 2024 – Oct 2026, 626 days)
+## 4. Results
 
-| Model | Return RMSE | Price MAPE % | Direction acc. % |
-|---|---|---|---|
-| LSTM | 0.00976 | 0.665 | 51.0 |
-
-Direction accuracy (51.0%, p = 0.99 on the binomial test) is not better than always guessing the majority class
-("up"). Next-day prices are dominated by today's price, so the predicted-price line tracks the actual one
-closely whatever the model learns.
+Run `python main.py train` to produce the test-set metrics for your ticker (see `outputs/<TICKER>_lstm/results.json`).
+Daily returns are close to noise, so the model's validation loss stays near the "predict the training mean"
+baseline, and next-day prices are dominated by today's price.
 
 ## 5. Limitations and future work
 - A single train/validation/test split was used. Walk-forward validation would be more robust.

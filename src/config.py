@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 @dataclass
 class Config:
     # Data
-    ticker: str = "^GSPC"            # S&P 500 index by default
+    ticker: str = "AAPL"             # Apple stock by default
     start: str = "2010-01-01"        # first date of historical data to download (YYYY-MM-DD)
     end: str | None = None           # None = up to today
     data_dir: Path = ROOT / "data"   # where raw price data is cached
@@ -20,14 +20,15 @@ class Config:
 
     # Model: LSTM (PyTorch) over the last `seq_len` days of features (see features.py)
     model: str = "lstm"              # used to name the output directory
-    seq_len: int = 20                # length of the input window (trading days)
-    hidden_size: int = 64            # LSTM hidden units per layer
-    num_layers: int = 2              # stacked LSTM layers
+    seq_len: int = 40                # length of the input window (trading days)
+    hidden_size: int = 32            # LSTM hidden units per layer (small: daily returns are mostly noise)
+    num_layers: int = 1              # stacked LSTM layers
     dropout: float = 0.2             # dropout before the output layer (and between layers if stacked)
 
     # Training
-    lr: float = 1e-3                 # Adam learning rate
-    weight_decay: float = 1e-4       # L2 penalty
+    lr: float = 3e-4                 # Adam learning rate
+    weight_decay: float = 1e-2       # L2 penalty
+    huber_delta: float = 1.0         # Huber loss threshold (in std units); robust to extreme days
     batch_size: int = 64
     epochs: int = 100                # upper bound; early stopping usually ends sooner
     patience: int = 10               # stop after this many epochs without validation improvement
