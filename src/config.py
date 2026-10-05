@@ -18,6 +18,9 @@ class Config:
     val_ratio: float = 0.15          # fraction of data reserved for validation
     test_ratio: float = 0.15         # fraction of data reserved for testing
 
+    # What to predict: "return" = next-day log return; "volatility" = log realized volatility of the next 5 days
+    target: str = "return"
+
     # Model: LSTM (PyTorch) over the last `seq_len` days of features (see features.py)
     model: str = "lstm"              # used to name the output directory
     seq_len: int = 40                # length of the input window (trading days)

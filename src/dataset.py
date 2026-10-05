@@ -15,6 +15,7 @@ class Split:
     y: np.ndarray            # (n,) next-day log return
     dates: pd.DatetimeIndex  # date of the last observed day (prediction made at its close)
     close: np.ndarray        # close price on that date (to rebuild predicted price)
+    trailing_vol: np.ndarray  # log realized volatility of the past days (baseline for the volatility target)
 
 
 @dataclass
@@ -33,7 +34,7 @@ def _windows(x: np.ndarray, seq_len: int) -> np.ndarray:
 def _split(X: np.ndarray, ends: pd.DataFrame, lo: int, hi: int) -> Split:
     """Build a Split from the window/label rows in ``[lo, hi)``."""
     rows = ends.iloc[lo:hi]
-    return Split(X[lo:hi], rows["target"].values, rows.index, rows["Close"].values)
+    return Split(X[lo:hi], rows["target"].values, rows.index, rows["Close"].values, rows["vol_trailing"].values)
 
 
 def prepare(df: pd.DataFrame, seq_len: int, val_ratio: float, test_ratio: float) -> Prepared:

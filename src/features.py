@@ -17,8 +17,16 @@ def _rsi(close: pd.Series, n: int = 14) -> pd.Series:
     return gain / (gain + loss)
 
 
-def add_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add the feature columns in ``FEATURES`` and the next-day ``target`` column to an OHLCV DataFrame."""
+VOL_HORIZON = 5  # trading days over which realized volatility is measured
+
+
+def add_features(df: pd.DataFrame, target: str = "return") -> pd.DataFrame:
+    """Add the feature columns in ``FEATURES`` and the ``target`` column to an OHLCV DataFrame.
+
+    target="return":     next-day log return.
+    target="volatility": log of realized volatility (RMS of daily log returns) over the next
+                         ``VOL_HORIZON`` days; ``vol_trailing`` is the same quantity over the past days.
+    """
     out = df.copy()
     close = out["Close"]
     out["log_ret"] = np.log(close / close.shift(1))
@@ -29,6 +37,13 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     out["volatility_10"] = out["log_ret"].rolling(10).std()
     out["hl_range"] = (out["High"] - out["Low"]) / close             # intraday range
     out["sma_gap_20"] = close / close.rolling(20).mean() - 1         # distance from 20-day average
-    # Target: next-day log return (shift -1 looks one day ahead -> label only)
-    out["target"] = out["log_ret"].shift(-1)
+    # Targets look ahead (negative shift) -> labels only, never features
+    sq = out["log_ret"] ** 2
+    out["vol_trailing"] = 0.5 * np.log(sq.rolling(VOL_HORIZON).mean() + 1e-12)
+    if target == "return":
+        out["target"] = out["log_ret"].shift(-1)
+    elif target == "volatility":
+        out["target"] = 0.5 * np.log(sq.rolling(VOL_HORIZON).mean().shift(-VOL_HORIZON) + 1e-12)
+    else:
+        raise ValueError(f"Unknown target '{target}' (expected 'return' or 'volatility').")
     return out
