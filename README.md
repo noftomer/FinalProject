@@ -1,7 +1,8 @@
-# Next-Day Stock Price Prediction (PyTorch LSTM)
+# Stock Volatility / Return Prediction (PyTorch LSTM)
 
-Forecasts the **next trading day's return and closing price** of a stock or index with an LSTM
-(PyTorch) trained on the last 40 days of returns, volume and technical indicators, and evaluates it on a held-out test period.
+Forecasts the **realized volatility over the next 5 trading days** (default) or the **next-day return** of a stock or
+index with an LSTM (PyTorch) trained on the last 40 days of returns, volume and technical indicators, and evaluates it
+on a held-out test period.
 
 > Academic use only. This is not financial advice.
 
@@ -14,13 +15,13 @@ FinalProject/
 ├── src/
 │   ├── config.py        # all settings (single source of truth)
 │   ├── data.py          # Yahoo Finance download + CSV cache
-│   ├── features.py      # returns, volume, RSI, MACD, ... + next-day target
+│   ├── features.py      # returns, volume, RSI, MACD, ... + target (volatility or return)
 │   ├── dataset.py       # sliding windows, chronological split and scaling
 │   ├── models.py        # LSTM regressor (PyTorch)
 │   ├── train.py         # Adam training loop with early stopping on validation loss
 │   └── evaluate.py      # metrics, significance test, plots
 ├── data/                # cached price CSVs (auto-created)
-└── outputs/<TICKER>_lstm/
+└── outputs/<TICKER>_lstm_vol/   (volatility target; <TICKER>_lstm/ for the return target)
     ├── results.json          # all metrics and train/val loss history
     ├── test_predictions.csv  # per-day predictions
     ├── model.pt              # weights + scaler + config
@@ -31,12 +32,13 @@ FinalProject/
 
 ```bash
 pip install -r requirements.txt
-python main.py train --ticker AAPL
+python main.py train --ticker AAPL                      # default: volatility target
 python main.py predict --ticker AAPL
+python main.py train --ticker AAPL --target return      # next-day return instead
 ```
 
 Any Yahoo Finance ticker works (`AAPL`, `MSFT`, `^IXIC`, `TA35.TA`, `BTC-USD`, …).
-Other options: `--start`, `--end`, `--seq-len` (input window length, default 40), `--epochs`, `--refresh`.
+Other options: `--start`, `--end`, `--target` (`volatility` default, or `return`), `--seq-len` (input window length, default 40), `--epochs`, `--refresh`.
 Model and training hyper-parameters (hidden size, layers, dropout, learning rate, …) are in `src/config.py`.
 
 ## 3. Methodology
@@ -45,11 +47,13 @@ Model and training hyper-parameters (hidden size, layers, dropout, learning rate
 Daily adjusted OHLCV data from Yahoo Finance (2010 until today by default).
 
 ### 3.2 Target
-The model predicts the **next-day log return** `r(t+1) = ln(Close(t+1) / Close(t))`. The predicted price is
-rebuilt as `Close(t) · exp(r̂)`, so the next business day's price is the last close times the forecast change.
+- **`volatility` (default):** the log of realized volatility (RMS of daily log returns) over the next 5 trading days.
+  Volatility clusters in time, so unlike returns it is partly predictable.
+- **`return`:** the next-day log return `r(t+1) = ln(Close(t+1) / Close(t))`; the predicted price is rebuilt as
+  `Close(t) · exp(r̂)`. Daily returns are close to noise, so the model learns almost nothing here (see Results).
 
 ### 3.3 Input
-A sliding window of the last `seq_len` (20) days, with 7 features per day, standardized with training-set statistics:
+A sliding window of the last `seq_len` (40) days, with 7 features per day, standardized with training-set statistics:
 daily log return, change in log volume, RSI(14), MACD histogram (price-normalized), 10-day volatility,
 intraday high-low range, and the gap from the 20-day moving average.
 
@@ -60,19 +64,33 @@ intraday high-low range, and the gap from the 20-day moving average.
 - Early stopping and model selection use the **validation** set. The test set is used once, at the end.
 
 ### 3.5 Model
-`nn.LSTM(7 → 64, 2 layers)` → dropout → linear layer, trained with MSE loss, Adam, gradient clipping, and early
-stopping (patience 10). The best-validation epoch's weights are kept. A fixed seed makes runs reproducible.
+`nn.LSTM(7 → 32, 1 layer)` → dropout → linear layer, trained with Huber loss (early stopping on validation MSE), Adam
+with weight decay, gradient clipping, and early stopping (patience 10). The best-validation epoch's weights are kept. A fixed seed makes runs reproducible.
 
 ### 3.6 Evaluation
-1. **Error metrics** on returns (RMSE, MAE) and on prices (RMSE, MAPE).
-2. **Directional accuracy**: the share of days where the sign of the predicted return was correct.
-3. A **binomial test** of whether directional accuracy beats always guessing the majority class.
+**Volatility target:** RMSE, MAE, R² versus the training-mean prediction, and correlation, compared against the
+`TRAIN_MEAN` and `TRAILING_5D` (volatility of the past 5 days) baselines.
 
-## 4. Results
+**Return target:** error metrics on returns and prices, directional accuracy, and a binomial test of whether it beats
+always guessing the majority class.
 
-Run `python main.py train` to produce the test-set metrics for your ticker (see `outputs/<TICKER>_lstm/results.json`).
-Daily returns are close to noise, so the model's validation loss stays near the "predict the training mean"
-baseline, and next-day prices are dominated by today's price.
+## 4. Results (AAPL)
+
+**Volatility target** (test set, log-volatility space):
+
+| | RMSE | MAE | R² vs train mean | corr |
+|---|---|---|---|---|
+| MODEL | 0.516 | 0.403 | 0.064 | 0.32 |
+| TRAIN_MEAN | 0.533 | 0.414 | 0.000 | – |
+| TRAILING_5D | 0.681 | 0.534 | -0.633 | 0.19 |
+
+Validation loss reaches 0.48 against a 0.82 baseline, so the model learns a real signal and beats both baselines on the
+test set. The test R² is small (0.064), likely because the volatility level differs between the training and test
+periods, so the gain is modest.
+
+**Return target:** validation loss stays at the "predict the training mean" baseline (0.984 vs 0.985), test RMSE equals
+the zero/mean baselines, and directional accuracy (55.3%) is below always guessing "up" (55.8%; binomial p = 0.61).
+Next-day returns are essentially unpredictable with these inputs.
 
 ## 5. Limitations and future work
 - A single train/validation/test split was used. Walk-forward validation would be more robust.

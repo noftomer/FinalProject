@@ -22,31 +22,31 @@
     "seed": 42
   },
   "model": {
-    "return_rmse": 0.017729348808920267,
+    "return_rmse": 0.01772934880892026,
     "return_mae": 0.011926826547395896,
-    "price_rmse": 4.187578559716726,
-    "price_mape_%": 1.192708111287304,
+    "price_rmse": 4.187578559716725,
+    "price_mape_%": 1.1927081112873044,
     "directional_accuracy_%": 55.30546623794213
   },
   "baselines": {
     "ZERO (tomorrow = today)": {
-      "return_rmse": 0.017740486206706534,
+      "return_rmse": 0.01774048620670653,
       "return_mae": 0.011980455551818514,
-      "price_rmse": 4.187912101029401,
-      "price_mape_%": 1.197051321733939,
+      "price_rmse": 4.1879121010294,
+      "price_mape_%": 1.1970513217339394,
       "directional_accuracy_%": NaN
     },
     "TRAIN_MEAN": {
-      "return_rmse": 0.01770494538577623,
-      "return_mae": 0.011893751137988472,
+      "return_rmse": 0.017704945385776223,
+      "return_mae": 0.01189375113798847,
       "price_rmse": 4.181150300158467,
-      "price_mape_%": 1.189615777830434,
+      "price_mape_%": 1.1896157778304342,
       "directional_accuracy_%": 55.78778135048231
     },
     "ALWAYS_UP": {
-      "return_rmse": 0.01774048620664306,
+      "return_rmse": 0.017740486206643057,
       "return_mae": 0.01198045555170455,
-      "price_rmse": 4.187912101015299,
+      "price_rmse": 4.187912101015298,
       "price_mape_%": 1.1970513217237384,
       "directional_accuracy_%": 55.78778135048231
     }
