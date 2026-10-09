@@ -12,6 +12,8 @@ on a held-out test period.
 FinalProject/
 ├── main.py              # CLI: train | predict
 ├── requirements.txt
+├── run.bat              # Windows launcher: creates .venv, installs deps, runs main.py
+├── train_aapl.bat, predict_aapl.bat, ...   # ready-made shortcuts that call run.bat
 ├── src/
 │   ├── config.py        # all settings (single source of truth)
 │   ├── data.py          # Yahoo Finance download + CSV cache
@@ -36,6 +38,30 @@ python main.py train --ticker AAPL                      # default: volatility ta
 python main.py predict --ticker AAPL
 python main.py train --ticker AAPL --target return      # next-day return instead
 ```
+
+### Windows (.bat launchers)
+
+`run.bat` creates a `.venv` on first use, installs `requirements.txt` (again only when it changes) and forwards all
+arguments to `main.py`:
+
+```bat
+run.bat                                       :: train AAPL (volatility target)
+run.bat predict --ticker AAPL
+run.bat train --ticker MSFT --target return --epochs 50
+```
+
+Double-clickable shortcuts (each calls `run.bat` and pauses at the end):
+
+| File | Runs |
+|---|---|
+| `train_aapl.bat` | `run.bat` (default) |
+| `predict_aapl.bat` | `run.bat predict --ticker AAPL` |
+| `train_msft.bat` | `run.bat train --ticker MSFT` |
+| `train_aapl_return.bat` | `run.bat train --ticker AAPL --target return` |
+| `train_aapl_epochs50.bat` | `run.bat train --ticker AAPL --epochs 50 --seq-len 60` |
+| `train_aapl_refresh.bat` | `run.bat train --ticker AAPL --refresh` |
+
+`predict` needs a trained model, so run a train shortcut first.
 
 Any Yahoo Finance ticker works (`AAPL`, `MSFT`, `^IXIC`, `TA35.TA`, `BTC-USD`, …).
 Other options: `--start`, `--end`, `--target` (`volatility` default, or `return`), `--seq-len` (input window length, default 40), `--epochs`, `--refresh`.
