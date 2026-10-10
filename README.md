@@ -1,6 +1,6 @@
-# Stock Volatility / Return Prediction (PyTorch LSTM)
+# Stock Forecasting: Return, Price and Volatility (PyTorch LSTM)
 
-Forecasts the **realized volatility over the next 5 trading days** (default) or the **next-day return** of a stock or
+Forecasts the **next-day return (and price)** and the **realized volatility over the next 5 trading days** of a stock or
 index with an LSTM (PyTorch) trained on the last 40 days of returns, volume and technical indicators, and evaluates it
 on a held-out test period.
 
@@ -34,9 +34,9 @@ FinalProject/
 
 ```bash
 pip install -r requirements.txt
-python main.py train --ticker AAPL                      # default: volatility target
+python main.py train --ticker AAPL                      # trains both targets (return + volatility)
 python main.py predict --ticker AAPL
-python main.py train --ticker AAPL --target return      # next-day return instead
+python main.py train --ticker AAPL                      # trains both targets (return + volatility)
 ```
 
 ### Windows (.bat launchers)
@@ -45,7 +45,7 @@ python main.py train --ticker AAPL --target return      # next-day return instea
 arguments to `main.py`:
 
 ```bat
-run.bat                                       :: train AAPL (volatility target)
+run.bat                                       :: train AAPL (both targets)
 run.bat predict --ticker AAPL
 run.bat train --ticker MSFT --target return --epochs 50
 ```
@@ -64,7 +64,7 @@ Double-clickable shortcuts (each calls `run.bat` and pauses at the end):
 `predict` needs a trained model, so run a train shortcut first.
 
 Any Yahoo Finance ticker works (`AAPL`, `MSFT`, `^IXIC`, `TA35.TA`, `BTC-USD`, …).
-Other options: `--start`, `--end`, `--target` (`volatility` default, or `return`), `--seq-len` (input window length, default 40), `--epochs`, `--refresh`.
+Other options: `--start`, `--end`, `--target` (`all` default, `return` or `volatility`), `--seq-len` (input window length, default 40), `--epochs`, `--refresh`.
 Model and training hyper-parameters (hidden size, layers, dropout, learning rate, …) are in `src/config.py`.
 
 ## 3. Methodology
@@ -73,7 +73,7 @@ Model and training hyper-parameters (hidden size, layers, dropout, learning rate
 Daily adjusted OHLCV data from Yahoo Finance (2010 until today by default).
 
 ### 3.2 Target
-- **`volatility` (default):** the log of realized volatility (RMS of daily log returns) over the next 5 trading days.
+- **`volatility`:** the log of realized volatility (RMS of daily log returns) over the next 5 trading days.
   Volatility clusters in time, so unlike returns it is partly predictable.
 - **`return`:** the next-day log return `r(t+1) = ln(Close(t+1) / Close(t))`; the predicted price is rebuilt as
   `Close(t) · exp(r̂)`. Daily returns are close to noise, so the model learns almost nothing here (see Results).

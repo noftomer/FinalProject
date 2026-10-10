@@ -1,9 +1,10 @@
-"""Next-day stock price prediction with a PyTorch LSTM — command-line entry point.
+"""Stock forecasting with a PyTorch LSTM (next-day return/price and 5-day volatility) — command-line entry point.
 
 Examples
 --------
-    python main.py                      # train with all defaults from src/config.py
-    python main.py train --ticker AAPL
+    python main.py predict              # forecast with every trained target (return + volatility)
+    python main.py train --ticker AAPL  # train both targets
+    python main.py train --target return
     python main.py predict --ticker AAPL
 """
 import argparse
@@ -22,6 +23,9 @@ from src.evaluate import (baseline_metrics, direction_significance, plot_all, pl
 from src.features import add_features
 from src.models import build_model
 from src.train import fit
+
+TARGETS = ["return", "volatility"]
+
 
 def run_dir(cfg: Config) -> Path:
     """Output directory for this ticker/model combination (e.g. outputs/AAPL_lstm)."""
@@ -100,7 +104,8 @@ def predict_next_day(cfg: Config) -> None:
     # Always pull fresh data up to today for a live prediction.
     df = add_features(load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=True), cfg.target)
     X = last_window(df, saved["seq_len"], ckpt["x_scaler"])
-    ret = float(model.predict(X)[0])
+    model_result=model.predict(X)
+    ret = float(model_result[0])
     if cfg.target == "volatility":
         print(f"Ticker: {cfg.ticker} | predicted daily volatility over the next 5 trading days: "
               f"{np.exp(ret) * 100:.2f}% (annualized ~{np.exp(ret) * np.sqrt(252) * 100:.1f}%)")
@@ -125,19 +130,21 @@ def main() -> None:
     p.add_argument("--ticker", default=Config.ticker)
     p.add_argument("--start", default=Config.start)
     p.add_argument("--end", default=None)
-    p.add_argument("--target", default=Config.target, choices=["return", "volatility"],
-                   help="predict next-day return or next-5-day volatility")
+    p.add_argument("--target", default="all", choices=["all", "return", "volatility"],
+                   help="next-day return, next-5-day volatility, or both (default: all)")
     p.add_argument("--seq-len", type=int, default=Config.seq_len, help="past trading days the LSTM sees")
     p.add_argument("--epochs", type=int, default=Config.epochs, help="maximum training epochs")
     p.add_argument("--refresh", action="store_true", help="re-download data instead of using cache")
     a = p.parse_args()
 
-    cfg = Config(ticker=a.ticker, start=a.start, end=a.end, target=a.target, seq_len=a.seq_len, epochs=a.epochs)
-
-    if a.command == "train":
-        train_and_evaluate(cfg, a.refresh)
-    else:
-        predict_next_day(cfg)
+    targets = TARGETS if a.target == "all" else [a.target]
+    for target in targets:
+        print(f"\n########## target: {target} ##########")
+        cfg = Config(ticker=a.ticker, start=a.start, end=a.end, target=target, seq_len=a.seq_len, epochs=a.epochs)
+        if a.command == "train":
+            train_and_evaluate(cfg, a.refresh)
+        else:
+            predict_next_day(cfg)
 
 
 if __name__ == "__main__":

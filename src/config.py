@@ -19,7 +19,7 @@ class Config:
     test_ratio: float = 0.15         # fraction of data reserved for testing
 
     # What to predict: "return" = next-day log return; "volatility" = log realized volatility of the next 5 days
-    target: str = "volatility"
+    target: str = "return"
 
     # Model: LSTM (PyTorch) over the last `seq_len` days of features (see features.py)
     model: str = "lstm"              # used to name the output directory

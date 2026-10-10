@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 rem Usage: run.bat [train|predict] [main.py options]
-rem   run.bat                                  -> train AAPL (volatility target)
+rem   run.bat                                  -> train AAPL (both targets)
 rem   run.bat predict --ticker AAPL
 rem   run.bat train --ticker MSFT --target return --epochs 50
 
