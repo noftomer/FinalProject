@@ -121,3 +121,13 @@ Next-day returns are essentially unpredictable with these inputs.
 ## 5. Limitations and future work
 - A single train/validation/test split was used. Walk-forward validation would be more robust.
 - Volume and technical indicators with a larger LSTM did not clearly improve results. Other inputs (VIX, rates, news) or architectures could still be tried.
+- **Feature ablation study (future work).** The contribution of the extra features beyond price (volume, RSI/MACD,
+  volatility/range, distance from the moving average) was not measured separately. An ablation study would train the
+  same LSTM on different feature subsets and compare test-set results, changing only the features:
+  - *Cumulative groups:* `log_ret` only → + volume → + momentum (RSI, MACD) → + volatility/range → all features.
+  - *Leave-one-out:* start from all features and remove one at a time, to see which ones help and which are redundant.
+
+  Everything else (data split, hyper-parameters, number of training rows) must stay identical. Because LSTM results
+  vary between runs, each experiment should be repeated with several random seeds and compared by mean ± standard
+  deviation, so that a small gap is not mistaken for a real effect. This would show whether the technical indicators
+  add real signal or only noise and overfitting, especially for the volatility target.
