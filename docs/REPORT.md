@@ -14,8 +14,8 @@ and compared with explicit baselines.
 
 | Target | Result on the test set | Verdict |
 |---|---|---|
-| Volatility | RMSE 0.516 vs 0.537 (train mean) and 0.672 (trailing 5-day); correlation 0.34; R² 0.076 | beats both baselines, modest gain |
-| Return | RMSE equals the baselines; directional accuracy 55.7% vs 56.2% for always guessing "up" (p = 0.61) | no detectable signal |
+| Volatility | RMSE 0.516 vs 0.537 (train mean) and 0.672 (trailing 5-day); correlation 0.34; R² 0.076 | beats both baselines overall, but the gain is modest and comes mainly from 2025 (section 6.1) |
+| Return | RMSE equals the baselines; directional accuracy 55.7% vs 56.2% for always guessing "up" (p = 0.61) | no detectable signal; the model is effectively a constant "up" predictor (section 6.2) |
 
 The main finding is the contrast: volatility is partly predictable from the history, while next-day returns are
 indistinguishable from noise with these inputs. This is consistent with the efficient-market view, and the project
@@ -72,8 +72,9 @@ All numbers below come from the stored runs `outputs/AAPL_lstm_vol/results.json`
 
 - The model beats both baselines (criteria S1, S2 and S3 in the plan are met).
 - The validation loss falls from about 1.0 to 0.48 while the training loss ends near 0.68, so the model learns a real
-  signal in the validation period. On the test set the gain is smaller (R² 0.076), probably because the volatility level
-  in 2024-2026 differs from the training period. This is a hypothesis; it was not tested separately.
+  signal in the validation period. On the test set the gain is smaller (R² 0.076). An earlier version of this report
+  suggested that the volatility level differs between the training and test periods; the error analysis
+  (section 6) **does not support this**: the mean log-volatility is -4.34 in training and -4.36 in the test set.
 - `TRAILING_5D` is worse than the constant mean because the 5-day realized volatility is itself a noisy estimate of the
   future one; the LSTM acts partly as a smoother of it.
 
@@ -94,6 +95,8 @@ All numbers below come from the stored runs `outputs/AAPL_lstm_vol/results.json`
 - The price error (MAPE about 1.18%) looks small, but it is equal to the "tomorrow = today" baseline: it reflects how
   little the price moves in a day, not forecasting skill.
 - Criterion S4 is met only in the weak sense of "not worse than the baseline"; S5 shows no significant skill.
+- The error analysis (section 6) shows why the 55.7% is not skill: the model predicts "up" on 97.8% of days, so its
+  accuracy is simply the share of up days in the test set.
 
 ### 5.3 Plots
 
@@ -102,35 +105,120 @@ All numbers below come from the stored runs `outputs/AAPL_lstm_vol/results.json`
 
 ## 6. Error analysis and limitations
 
-**Observed from the results**
-- Return predictions have almost no spread: the model learns to stay close to the mean, so it cannot separate up days
-  from down days (standard deviation of predicted next-day returns 0.0005, versus 0.0176 for the actual returns).
-- The volatility model improves on the baseline only modestly, and its gain on the test period is much lower than on
-  the validation period, which indicates sensitivity to a shift in the volatility regime.
+Produced by `python -m src.error_analysis --ticker AAPL` from the stored `test_predictions.csv` files (no retraining).
+Full tables are in `outputs/AAPL_error_analysis/error_analysis.json`, with two plots (`volatility_errors.png`,
+`return_errors.png`).
 
-**Limitations**
-- A single chronological split and a single seed: the numbers have no confidence interval, and part of the small gain on
-  volatility could be due to chance in the initialization. Walk-forward validation and multiple seeds are needed.
+### 6.1 Volatility model
+
+| Actual volatility level (test quintile) | n | mean actual | mean predicted | bias | RMSE model | RMSE train mean |
+|---|---|---|---|---|---|---|
+| Q1 (calmest) | 125 | -5.11 | -4.36 | +0.74 | 0.806 | 0.816 |
+| Q2 | 125 | -4.63 | -4.33 | +0.30 | 0.379 | 0.308 |
+| Q3 | 124 | -4.34 | -4.26 | +0.08 | 0.260 | 0.074 |
+| Q4 | 125 | -4.09 | -4.28 | -0.19 | 0.256 | 0.258 |
+| Q5 (most volatile) | 125 | -3.62 | -4.12 | -0.50 | 0.637 | 0.779 |
+
+| Year | n | bias | RMSE model | RMSE train mean |
+|---|---|---|---|---|
+| 2024 (from April) | 175 | +0.02 | 0.454 | 0.440 |
+| 2025 | 250 | +0.13 | 0.582 | 0.640 |
+| 2026 (to October) | 199 | +0.09 | 0.479 | 0.468 |
+
+Findings:
+- **The predictions are compressed toward the mean.** Their standard deviation is 0.25 versus 0.54 for the actual
+  values. The model overestimates volatility on calm days (bias +0.74 in the calmest quintile) and underestimates it on
+  turbulent days (bias -0.50 in the most volatile quintile).
+- **The gain over the baseline comes mainly from the turbulent days.** The model is better than the training mean in the
+  most volatile quintile (0.637 vs 0.779), about equal in the calmest quintile and in Q4, and *worse* than a constant in
+  Q2 and Q3 (the middle of the range), where the constant is already almost exact.
+- **The gain is concentrated in one year.** The model beats the constant in 2025 only (0.582 vs 0.640), and is slightly
+  worse in 2024 and 2026 (0.454 vs 0.440, 0.479 vs 0.468). Seven of the ten largest misses are in 2025: the sharp
+  market move around 2025-04-01/02 was under-predicted by 1.4-1.8 log units, and several quiet days in 2025 were
+  over-predicted by about 1.4. The overall advantage (RMSE 0.516 vs 0.537) therefore rests on how the model reacts to
+  one volatile episode, and should not be read as a stable skill.
+- There is no level shift between training and test (mean log-volatility -4.34 vs -4.36), and the overall bias is
+  small (+0.09).
+
+### 6.2 Return model
+
+| Metric (test set) | Value |
+|---|---|
+| Standard deviation of predictions / of actual returns | 0.00057 / 0.0176 |
+| Correlation between predicted and actual return | -0.02 |
+| Share of days predicted "up" | 97.8% |
+
+| Year | directional accuracy % | share of up days % |
+|---|---|---|
+| 2024 | 63.4 | 63.4 |
+| 2025 | 51.6 | 52.4 |
+| 2026 | 53.7 | 53.7 |
+
+Findings:
+- **The model is effectively a constant "up" predictor.** Its directional accuracy per year equals the share of up
+  days in that year (to within one day), its correlation with the true return is zero, and its predictions vary by
+  0.06% against real moves of 1.8%. The aggregate 55.7% is therefore the base rate of up days, not forecasting ability.
+- **It does not anticipate large moves.** The ten largest absolute moves in the test set (for example +14.3% on
+  2025-04-08 and -9.7% on 2025-04-02) all received predictions between -0.06% and +0.14%.
+- The error equals that of the "zero" baseline in every market regime (calm to turbulent) and for every
+  prediction-size quartile, so no subgroup shows a hidden skill. Directional accuracy by prediction size
+  (51-60%) shows no monotone pattern.
+
+### 6.3 Limitations
+
+- A single chronological split and a single seed: the numbers have no confidence interval. The volatility gain is
+  concentrated in one year, so it could change with another split. Walk-forward validation and multiple seeds are needed.
 - One asset (AAPL) in the reference experiment.
 - Only price and volume inputs. No market-wide, macro or news information.
 - No transaction costs or trading rule: the results say nothing about profitability.
-- The test period is one market regime; extreme events (crashes) are rare and weakly represented.
-
-**To be added (planned, not yet done):** a quantitative error breakdown from `test_predictions.csv` by period and by
-volatility level (for example, error on the highest-volatility decile versus the rest), and examples of the largest
-misses.
+- The test period is about 2.5 years; extreme events are few.
+- The error analysis is descriptive: the explanations above (for example the effect of one volatile episode) are read
+  from the tables and were not isolated by a separate experiment.
 
 ## 7. Response time and failure behavior
 
-**Code-level behavior (read from the source, not yet tested)**
-- Unknown ticker or empty download: `RuntimeError("No data returned for ticker …")` in `src/data.py`.
-- `predict` without a trained model: exits with "No trained model at … Run `python main.py train` first."
-- Invalid `--target` value: rejected by the argument parser.
-- Cached data lets `train` and `predict` run without network access, as long as the cache file exists.
+Automated tests: `pytest tests` (21 tests, all passing; offline, about 3 seconds).
 
-**Not yet covered:** measured latency of `predict` and `train`; behavior when Yahoo Finance is unreachable on a first
-run; a history too short for the 40-day window; corrupted cache or checkpoint files. These are planned as an
-automated test suite (`tests/`) and a timing measurement, and the results will be added here.
+### 7.1 Response time
+
+Measured on the development machine (Windows 11, CPU only, PyTorch 2.14), with the trained AAPL models and the cached
+data. The Yahoo Finance download is mocked in the end-to-end test, so network time is not included.
+
+| Measure | Return model | Volatility model |
+|---|---|---|
+| Model forward pass, one window (median of 200 calls; p95) | 0.34 ms (p95 0.43 ms) | 0.34 ms (p95 0.47 ms) |
+| `predict` end to end without network (load checkpoint, features, scaling, forward pass, print) | 35 ms | 31 ms |
+
+In real use `predict` also downloads fresh prices from Yahoo Finance first, so its latency is dominated by that
+request. That time was **not measured**, since it depends on the network and on the external service. The training
+time was also not measured.
+
+### 7.2 Failure behavior
+
+Each case below is covered by a test in `tests/test_failures.py`.
+
+| Situation | Behavior |
+|---|---|
+| Unknown ticker (empty download) | `RuntimeError: No data returned for ticker ...`; no cache file is written |
+| Network failure or download exception | `RuntimeError: Could not download data for ... : <reason>` |
+| Network failure during `predict` | warning, and the forecast is made from the cached data. With no cache either, the error above |
+| Cached data present, no network | `train` works offline |
+| `predict` without a trained model | exits with "No trained model at ... Run `python main.py train` first." |
+| Corrupted checkpoint file | exits with "Could not load the model ... Re-train it with `python main.py train`." |
+| Invalid command-line arguments | rejected by the argument parser (exit code 2) |
+| Too little history (10, 45 or 60 rows) | `ValueError: Not enough ...`, with the number of windows and a suggested fix |
+| Constant prices (RSI undefined, every row dropped) | `ValueError: Not enough usable history ...` |
+| Missing values in the raw data | rows are dropped; no NaN or infinity reaches the model |
+| Untrained / garbage model | still prints a finite prediction; the CLI does not crash |
+
+**Found and fixed while writing the tests.** Before this change, a short history failed with an internal message
+("window shape cannot be larger than input array shape" or a scikit-learn error); 60 rows silently gave 1 training
+sample and no validation or test samples; a download exception from `yfinance` was not wrapped; `predict` always
+re-downloaded and crashed without a connection even though a cache existed; and a corrupted checkpoint raised a raw
+`torch.load` exception. The fixes are in `src/data.py`, `src/dataset.py` and `main.py`.
+
+**Not covered:** a corrupted CSV cache file; a Yahoo response with unexpected columns; and a model output that is wrong
+but finite (for example a prediction of -50% in one day), which the system does not detect or flag.
 
 ## 8. Improvement directions
 
@@ -155,9 +243,11 @@ in `requirements.txt`; no API keys are used.
 
 ## 10. Conclusions
 
-- The pipeline is leakage-safe, reproducible and runnable end to end.
-- The LSTM extracts a small but real signal for volatility (better than both baselines on the held-out test set).
-- For next-day returns it does not outperform trivial baselines, and the statistical test supports the conclusion that
-  the inputs carry no usable directional information.
+- The pipeline is leakage-safe, reproducible and runnable end to end, with automated tests of its failure behavior
+  and a measured response time of about 35 ms per prediction (excluding the network download).
+- The LSTM beats both baselines for volatility on the held-out test set, but the gain is small and concentrated in
+  the turbulent 2025 period; its predictions are compressed toward the mean. It is a weak signal, not a stable skill.
+- For next-day returns it does not outperform trivial baselines: it predicts "up" on 97.8% of days, and the statistical test supports the
+  conclusion that the inputs carry no usable directional information.
 - Honest reporting of the negative result, together with the baselines, is the main contribution; the next steps are to
-  strengthen the evidence (seeds, walk-forward, stronger baselines) and to complete the failure and latency tests.
+  strengthen the evidence (seeds, walk-forward, stronger baselines) and to complete the remaining items (corrupted cache, output sanity check, a GARCH baseline).

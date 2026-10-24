@@ -9,6 +9,10 @@ from sklearn.preprocessing import StandardScaler
 from src.features import FEATURES
 
 
+MIN_TRAIN = 100  # smallest training / validation / test sets for which training and evaluation make sense
+MIN_EVAL = 10
+
+
 @dataclass
 class Split:
     X: np.ndarray            # (n, seq_len, n_features) windows of scaled features
@@ -43,11 +47,18 @@ def prepare(df: pd.DataFrame, seq_len: int, val_ratio: float, test_ratio: float)
     A window may reach back into an earlier split (past data only), but its label never does.
     """
     df = df.dropna(subset=FEATURES)
+    if len(df) < seq_len:
+        raise ValueError(f"Not enough usable history: {len(df)} valid rows, but the window needs {seq_len} "
+                         "(rows with missing features, e.g. constant prices, are dropped).")
     ends = df.iloc[seq_len - 1:]                       # rows where a full window ends
     ends = ends[ends["target"].notna()]                # drop the latest day (no label yet)
     n = len(ends)
     n_test, n_val = int(n * test_ratio), int(n * val_ratio)
     n_train = n - n_val - n_test
+    if n_train < MIN_TRAIN or n_val < MIN_EVAL or n_test < MIN_EVAL:
+        raise ValueError(f"Not enough history to split: {n} labeled windows give train/val/test = "
+                         f"{n_train}/{n_val}/{n_test}, but at least {MIN_TRAIN}/{MIN_EVAL}/{MIN_EVAL} are "
+                         "required. Use an earlier --start date or a shorter --seq-len.")
 
     x = df[FEATURES].values
     x_scaler = StandardScaler().fit(x[:seq_len - 1 + n_train])
@@ -60,4 +71,6 @@ def prepare(df: pd.DataFrame, seq_len: int, val_ratio: float, test_ratio: float)
 def last_window(df: pd.DataFrame, seq_len: int, x_scaler: StandardScaler) -> np.ndarray:
     """The most recent ``seq_len`` rows (which have no label yet), scaled, shaped (1, seq_len, n_features)."""
     x = df.dropna(subset=FEATURES)[FEATURES].values[-seq_len:]
+    if len(x) < seq_len:
+        raise ValueError(f"Only {len(x)} valid days of data, but the model needs a window of {seq_len}.")
     return x_scaler.transform(x)[None]

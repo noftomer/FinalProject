@@ -95,14 +95,24 @@ def predict_next_day(cfg: Config) -> None:
     ckpt_path = run_dir(cfg) / "model.pt"
     if not ckpt_path.exists():
         raise SystemExit(f"No trained model at {ckpt_path}. Run `python main.py train` first.")
-    ckpt = torch.load(ckpt_path, weights_only=False)
-    saved = ckpt["config"]
-    model = build_model(ckpt["x_scaler"].n_features_in_, saved["hidden_size"], saved["num_layers"], saved["dropout"])
-    model.load_state_dict(ckpt["state_dict"])
+    try:
+        ckpt = torch.load(ckpt_path, weights_only=False)
+        saved = ckpt["config"]
+        model = build_model(ckpt["x_scaler"].n_features_in_, saved["hidden_size"], saved["num_layers"],
+                            saved["dropout"])
+        model.load_state_dict(ckpt["state_dict"])
+    except Exception as e:  # corrupted or incompatible checkpoint
+        raise SystemExit(f"Could not load the model at {ckpt_path} ({type(e).__name__}: {e}). "
+                         "Re-train it with `python main.py train`.")
     model.eval()
 
-    # Always pull fresh data up to today for a live prediction.
-    df = add_features(load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=True), cfg.target)
+    # Pull fresh data up to today for a live prediction; if the download fails, fall back to the cached data.
+    try:
+        prices = load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=True)
+    except RuntimeError as e:
+        print(f"Warning: {e}\nUsing cached data instead (it may not include the latest trading days).")
+        prices = load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=False)
+    df = add_features(prices, cfg.target)
     X = last_window(df, saved["seq_len"], ckpt["x_scaler"])
     model_result=model.predict(X)
     ret = float(model_result[0])

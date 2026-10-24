@@ -19,9 +19,12 @@ def load_prices(ticker: str, start: str, end: str | None, data_dir: Path,
         df = pd.read_csv(cache, index_col=0, parse_dates=True)
     else:
         import yfinance as yf
-        df = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
-        if df.empty:
-            raise RuntimeError(f"No data returned for ticker '{ticker}'.")
+        try:
+            df = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
+        except Exception as e:  # network down, rate limit, malformed response, ...
+            raise RuntimeError(f"Could not download data for '{ticker}' from Yahoo Finance: {e}") from e
+        if df is None or df.empty:
+            raise RuntimeError(f"No data returned for ticker '{ticker}' (unknown symbol, or Yahoo Finance is unreachable).")
         if isinstance(df.columns, pd.MultiIndex):  # newer yfinance returns (field, ticker)
             # flatten MultiIndex columns to just the field name (drop the ticker level)
             df.columns = df.columns.get_level_values(0)

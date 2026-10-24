@@ -11,7 +11,7 @@ on a held-out test period.
 ```
 FinalProject/
 ├── main.py              # CLI: train | predict
-├── requirements.txt
+├── requirements.txt, requirements-dev.txt   # runtime / + pytest
 ├── run.bat              # Windows launcher: creates .venv, installs deps, runs main.py
 ├── train_aapl.bat, predict_aapl.bat, ...   # ready-made shortcuts that call run.bat
 ├── src/
@@ -21,7 +21,10 @@ FinalProject/
 │   ├── dataset.py       # sliding windows, chronological split and scaling
 │   ├── models.py        # LSTM regressor (PyTorch)
 │   ├── train.py         # Adam training loop with early stopping on validation loss
-│   └── evaluate.py      # metrics, significance test, plots
+│   ├── evaluate.py      # metrics, significance test, plots
+│   └── error_analysis.py  # error breakdown of the stored test predictions
+├── tests/               # pytest: failure behavior (test_failures.py) and response time (test_latency.py)
+├── docs/                # PLAN.md (project plan) and REPORT.md (final report)
 ├── data/                # cached price CSVs (auto-created)
 └── outputs/<TICKER>_lstm_vol/   (volatility target; <TICKER>_lstm/ for the return target)
     ├── results.json          # all metrics and train/val loss history
@@ -106,19 +109,32 @@ always guessing the majority class.
 
 | | RMSE | MAE | R² vs train mean | corr |
 |---|---|---|---|---|
-| MODEL | 0.516 | 0.403 | 0.064 | 0.32 |
-| TRAIN_MEAN | 0.533 | 0.414 | 0.000 | – |
-| TRAILING_5D | 0.681 | 0.534 | -0.633 | 0.19 |
+| MODEL | 0.516 | 0.405 | 0.076 | 0.34 |
+| TRAIN_MEAN | 0.537 | 0.417 | 0.000 | – |
+| TRAILING_5D | 0.672 | 0.526 | -0.569 | 0.21 |
 
 Validation loss reaches 0.48 against a 0.82 baseline, so the model learns a real signal and beats both baselines on the
-test set. The test R² is small (0.064), likely because the volatility level differs between the training and test
-periods, so the gain is modest.
+test set. The test R² is small (0.076): the predictions are compressed toward the mean, and the gain over the constant baseline
+comes mainly from the turbulent 2025 period (see `docs/REPORT.md`, section 6).
 
 **Return target:** validation loss stays at the "predict the training mean" baseline (0.984 vs 0.985), test RMSE equals
-the zero/mean baselines, and directional accuracy (55.3%) is below always guessing "up" (55.8%; binomial p = 0.61).
+the zero/mean baselines, and directional accuracy (55.7%) is below always guessing "up" (56.2%; binomial p = 0.61). The model predicts "up" on
+97.8% of days, so it is effectively a constant predictor.
 Next-day returns are essentially unpredictable with these inputs.
 
-## 5. Limitations and future work
+## 5. Tests and error analysis
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests                          # 21 offline tests: invalid input, network/model failures, response time
+pytest tests/test_latency.py -s       # also prints the measured latencies
+python -m src.error_analysis --ticker AAPL   # needs a trained model; writes outputs/AAPL_error_analysis/
+```
+
+The tests need the cached `data/AAPL_2010-01-01_latest.csv`; the latency tests also need trained models in `outputs/`.
+Findings are summarized in `docs/REPORT.md` (sections 6 and 7).
+
+## 6. Limitations and future work
 - A single train/validation/test split was used. Walk-forward validation would be more robust.
 - Volume and technical indicators with a larger LSTM did not clearly improve results. Other inputs (VIX, rates, news) or architectures could still be tried.
 - **Feature ablation study (future work).** The contribution of the extra features beyond price (volume, RSI/MACD,

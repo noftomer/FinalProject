@@ -67,8 +67,8 @@ Evaluated on the held-out test set (the last 15% of days).
 | S4 | Return model price error is no worse than the **ZERO** (tomorrow = today) baseline | price RMSE ≤ baseline |
 | S5 | Directional accuracy is judged **against always guessing the majority class**, with a binomial test | report hits, n, p-value; significant only if p < 0.05 |
 | S6 | Reproducibility | fixed seed; a fresh clone follows the README and reproduces the results |
-| S7 | Robustness | invalid input, missing model and a data-service failure give a clear message, not a stack trace (to be verified, see the report) |
-| S8 | Response time | `predict` latency measured and reported (to be verified, see the report) |
+| S7 | Robustness | invalid input, missing model and a data-service failure give a clear message, not a stack trace (verified by `tests/test_failures.py`, see report section 7) |
+| S8 | Response time | `predict` latency measured and reported (see report section 7; ~35 ms without the network download) |
 
 An honest "no signal" outcome on the return target is an acceptable result, provided it is demonstrated with a
 statistical test rather than only observed.
@@ -101,7 +101,7 @@ correlation, directional accuracy with a binomial test.
 | 4. Model and training loop | `src/models.py`, `src/train.py` | done |
 | 5. Evaluation against baselines | `src/evaluate.py`, `outputs/` | done |
 | 6. Runnable system (CLI and launchers) | `main.py`, `*.bat` | done |
-| 7. Error analysis, latency and failure tests | to be added to the report | planned |
+| 7. Error analysis, latency and failure tests | `src/error_analysis.py`, `tests/`, report sections 6-7 | done |
 | 8. Final report | `docs/REPORT.md` | in progress |
 | 9. Ablation study | future work | optional |
 
