@@ -13,7 +13,7 @@ import torch
 import main
 from src.config import Config
 from src.dataset import last_window
-from src.features import add_features
+from src.features import add_features, market_features
 from src.models import build_model
 
 CHECKPOINTS = {"return": "AAPL_lstm", "volatility": "AAPL_lstm_vol"}
@@ -33,7 +33,7 @@ def test_single_window_inference_latency(aapl, target):
     saved = ckpt["config"]
     model = build_model(ckpt["x_scaler"].n_features_in_, saved["hidden_size"], saved["num_layers"], saved["dropout"])
     model.load_state_dict(ckpt["state_dict"])
-    X = last_window(add_features(aapl, target), saved["seq_len"], ckpt["x_scaler"])
+    X = last_window(add_features(aapl, target, market_features(aapl, aapl)), saved["seq_len"], ckpt["x_scaler"])
     model.predict(X)  # warm-up
     times = []
     for _ in range(200):

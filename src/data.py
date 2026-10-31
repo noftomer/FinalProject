@@ -34,3 +34,11 @@ def load_prices(ticker: str, start: str, end: str | None, data_dir: Path,
     df = df.sort_index()
     df = df[~df.index.duplicated()].dropna()
     return df
+
+
+def load_market(start: str, end: str | None, data_dir: Path, refresh: bool = False) -> pd.DataFrame:
+    """SPY and VIX derived features (see ``market_features``); each series is cached like a ticker."""
+    from src.features import market_features
+    spy = load_prices("SPY", start, end, data_dir, refresh)
+    vix = load_prices("^VIX", start, end, data_dir, refresh)
+    return market_features(spy, vix)

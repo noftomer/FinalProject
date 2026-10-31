@@ -13,7 +13,7 @@ import main
 from src.config import Config
 from src.data import load_prices
 from src.dataset import last_window, prepare
-from src.features import FEATURES, add_features
+from src.features import FEATURES, MARKET_FEATURES, add_features
 from src.models import build_model
 
 
@@ -26,10 +26,17 @@ def _no_network(*args, **kwargs):
     raise ConnectionError("network is unreachable")
 
 
+def _cache_prices(data_dir, aapl) -> None:
+    """Write AAPL, SPY and VIX price caches (the VIX/SPY ones are copies of AAPL) into ``data_dir``."""
+    for name in ("AAPL", "SPY", "VIX"):
+        aapl.to_csv(data_dir / f"{name}_2010-01-01_latest.csv")
+
+
 def _tiny_checkpoint(cfg: Config) -> None:
     """Save an untrained model in the layout ``main.train_and_evaluate`` writes."""
-    scaler = StandardScaler().fit(np.random.default_rng(0).normal(size=(50, len(FEATURES))))
-    model = build_model(len(FEATURES), cfg.hidden_size, cfg.num_layers, cfg.dropout)
+    n = len(FEATURES) + len(MARKET_FEATURES)
+    scaler = StandardScaler().fit(np.random.default_rng(0).normal(size=(50, n)))
+    model = build_model(n, cfg.hidden_size, cfg.num_layers, cfg.dropout)
     out = main.run_dir(cfg)
     out.mkdir(parents=True)
     torch.save({"state_dict": model.state_dict(), "config": cfg.to_dict(), "x_scaler": scaler}, out / "model.pt")
@@ -101,7 +108,7 @@ def test_cache_is_used_without_network(tmp_path, monkeypatch, aapl):
 def test_predict_falls_back_to_cache_when_download_fails(tmp_path, monkeypatch, aapl, capsys):
     cfg = Config(output_dir=tmp_path, data_dir=tmp_path)
     _tiny_checkpoint(cfg)
-    aapl.to_csv(tmp_path / "AAPL_2010-01-01_latest.csv")
+    _cache_prices(tmp_path, aapl)
     _fake_yfinance(monkeypatch, _no_network)
     main.predict_next_day(cfg)
     out = capsys.readouterr().out

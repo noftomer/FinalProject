@@ -16,7 +16,7 @@ import pandas as pd
 import torch
 
 from src.config import Config
-from src.data import load_prices
+from src.data import load_market, load_prices
 from src.dataset import last_window, prepare
 from src.evaluate import (baseline_metrics, direction_significance, plot_all, plot_volatility,
                           regression_metrics, volatility_metrics)
@@ -35,7 +35,8 @@ def run_dir(cfg: Config) -> Path:
 
 def train_and_evaluate(cfg: Config, refresh: bool = False) -> dict:
     """Train the model, evaluate it on the test split, and save plots, metrics and the checkpoint."""
-    df = add_features(load_prices(cfg.ticker, cfg.start, cfg.end, cfg.data_dir, refresh), cfg.target)
+    prices = load_prices(cfg.ticker, cfg.start, cfg.end, cfg.data_dir, refresh)
+    df = add_features(prices, cfg.target, load_market(cfg.start, cfg.end, cfg.data_dir, refresh))
     data = prepare(df, cfg.seq_len, cfg.val_ratio, cfg.test_ratio)
     print(f"[{cfg.ticker} | {cfg.model}] samples: train={len(data.train.y)} "
           f"val={len(data.val.y)} test={len(data.test.y)} | "
@@ -112,7 +113,11 @@ def predict_next_day(cfg: Config) -> None:
     except RuntimeError as e:
         print(f"Warning: {e}\nUsing cached data instead (it may not include the latest trading days).")
         prices = load_prices(cfg.ticker, saved["start"], None, cfg.data_dir, refresh=False)
-    df = add_features(prices, cfg.target)
+    try:
+        market = load_market(saved["start"], None, cfg.data_dir, refresh=True)
+    except RuntimeError:
+        market = load_market(saved["start"], None, cfg.data_dir, refresh=False)
+    df = add_features(prices, cfg.target, market)
     X = last_window(df, saved["seq_len"], ckpt["x_scaler"])
     model_result=model.predict(X)
     ret = float(model_result[0])
