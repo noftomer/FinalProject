@@ -6,7 +6,8 @@ the last ``seq_len`` rows of these features (built in dataset.py).
 import numpy as np
 import pandas as pd
 
-FEATURES = ["log_ret", "vol_chg", "rsi", "macd_hist", "volatility_10", "hl_range", "sma_gap_20"]
+FEATURES = ["log_ret", "vol_chg", "rsi", "macd_hist", "volatility_10", "hl_range", "sma_gap_20",
+            "sma_gap_10", "sma_gap_50", "open_gap", "dow_sin", "dow_cos"]
 
 
 def _rsi(close: pd.Series, n: int = 14) -> pd.Series:
@@ -37,6 +38,11 @@ def add_features(df: pd.DataFrame, target: str = "return") -> pd.DataFrame:
     out["volatility_10"] = out["log_ret"].rolling(10).std()
     out["hl_range"] = (out["High"] - out["Low"]) / close             # intraday range
     out["sma_gap_20"] = close / close.rolling(20).mean() - 1         # distance from 20-day average
+    out["sma_gap_10"] = close / close.rolling(10).mean() - 1
+    out["sma_gap_50"] = close / close.rolling(50).mean() - 1
+    out["open_gap"] = np.log(out["Open"] / close.shift(1))            # overnight gap vs previous close
+    dow = 2 * np.pi * out.index.dayofweek / 5                        # day of week, cyclical
+    out["dow_sin"], out["dow_cos"] = np.sin(dow), np.cos(dow)
     # Targets look ahead (negative shift) -> labels only, never features
     sq = out["log_ret"] ** 2
     out["vol_trailing"] = 0.5 * np.log(sq.rolling(VOL_HORIZON).mean() + 1e-12)
