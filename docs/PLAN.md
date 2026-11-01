@@ -39,8 +39,10 @@ so a negative result is still a valid finding.
 - **Source:** Yahoo Finance (`yfinance`), daily adjusted OHLCV, from 2010-01-01 until today. Real data, no synthetic data.
 - **Management:** downloaded once and cached as CSV in `data/` (`--refresh` forces a re-download). No API key is needed.
 - **Split:** chronological, 70% train / 15% validation / 15% test, with no shuffling across time.
-- **Features (7 per day):** log return, change in log volume, RSI(14), MACD histogram (price-normalized), 10-day
-  volatility, intraday high-low range, gap from the 20-day moving average. Standardized with training-set statistics only.
+- **Features (18 per day):** 15 stock features — log return, absolute return, change in log volume, RSI(14), MACD
+  histogram (price-normalized), 10-day volatility, log 22-day realized volatility, log Parkinson volatility, intraday
+  high-low range, gaps from the 10/20/50-day moving averages, overnight open gap, and day of week (sin/cos) — plus 3
+  market features: SPY log return, log VIX level and its daily change. Standardized with training-set statistics only.
 - **Leakage controls:** a window uses only data up to day *t*; only the label looks ahead; scaler and target statistics
   come from the training set; the test set is used once, at the end.
 
@@ -52,8 +54,7 @@ so a negative result is still a valid finding.
 - CLI with `train` and `predict`, and Windows `.bat` launchers.
 - Evaluation on a held-out test period against baselines, plus plots and saved metrics.
 
-**Out of scope for the MVP** (listed as future work): multi-asset or portfolio models, news / macro inputs,
-walk-forward validation, hyper-parameter search, a web UI, trading strategy and transaction costs.
+**Out of scope for the MVP** (future work): multiple stocks at once, news data, and a trading strategy.
 
 ## 5. Measurable success criteria
 
@@ -88,22 +89,21 @@ model did not see in training. The pipeline is also runnable on other tickers (e
 **Metrics.** RMSE and MAE (in return, price and log-volatility space), MAPE for prices, `R²` versus the training mean,
 correlation, directional accuracy with a binomial test.
 
-**Additional checks.** Error analysis by period and volatility level; response-time measurement; failure-mode tests
+**Future additional checks.** Error analysis by period and volatility level; response-time measurement; failure-mode tests
 (invalid ticker, no network, missing model, too-short history); feature ablation with several random seeds.
 
 ## 7. Work plan
 
-| Stage | Output | Status |
+| Stage | Output 
 |---|---|---|
-| 1. Problem analysis and options | this document | done |
-| 2. Data collection and caching | `src/data.py` | done |
-| 3. Features and leakage-safe windows / split | `src/features.py`, `src/dataset.py` | done |
-| 4. Model and training loop | `src/models.py`, `src/train.py` | done |
-| 5. Evaluation against baselines | `src/evaluate.py`, `outputs/` | done |
-| 6. Runnable system (CLI and launchers) | `main.py`, `*.bat` | done |
-| 7. Error analysis, latency and failure tests | `src/error_analysis.py`, `tests/`, report sections 6-7 | done |
-| 8. Final report | `docs/REPORT.md` | in progress |
-| 9. Ablation study | future work | optional |
+| 1. Problem analysis and options | this document |
+| 2. Data collection and caching | `src/data.py` |
+| 3. Features and leakage-safe windows / split | `src/features.py`, `src/dataset.py`|
+| 4. Model and training loop | `src/models.py`, `src/train.py`|
+| 5. Evaluation against baselines | `src/evaluate.py`, `outputs/`|
+| 6. Runnable system (CLI and launchers) | `main.py`, `*.bat` |
+| 7. Error analysis, latency and failure tests | `src/error_analysis.py`, `tests/`, report sections 6-7 | 
+| 8. Ablation study |  optional |
 
 ## 8. Risks
 
