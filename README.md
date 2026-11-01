@@ -82,9 +82,11 @@ Daily adjusted OHLCV data from Yahoo Finance (2010 until today by default).
   `Close(t) · exp(r̂)`. Daily returns are close to noise, so the model learns almost nothing here (see Results).
 
 ### 3.3 Input
-A sliding window of the last `seq_len` (40) days, with 7 features per day, standardized with training-set statistics:
-daily log return, change in log volume, RSI(14), MACD histogram (price-normalized), 10-day volatility,
-intraday high-low range, and the gap from the 20-day moving average.
+A sliding window of the last `seq_len` (40) days, with 18 features per day, standardized with training-set statistics.
+15 stock features: log return, absolute return, change in log volume, RSI(14), MACD histogram (price-normalized),
+10-day volatility, log 22-day realized volatility, log Parkinson volatility, intraday high-low range, gaps from the
+10/20/50-day moving averages, overnight open gap, and day of week (sin/cos). Plus 3 market features: SPY log return,
+log VIX level, and its daily change.
 
 ### 3.4 Leakage prevention
 - **Chronological split** into 70% train, 15% validation, and 15% test, with no shuffling across time.
