@@ -32,7 +32,7 @@ A negative result on the return target is an acceptable outcome as long as it is
 | Stage | What was done | Why |
 |---|---|---|
 | Data | Daily adjusted OHLCV from Yahoo Finance via `yfinance`, cached as CSV in `data/` | free, real data; the cache makes runs repeatable and works offline; no API key is needed |
-| Features | 7 inputs per day: log return, change in log volume, RSI(14), price-normalized MACD histogram, 10-day volatility, high-low range, gap from the 20-day average | a compact set that covers price, volume, momentum, volatility and trend, built only from past values |
+| Features | 18 inputs per day: 15 stock features (log return, absolute return, change in log volume, RSI(14), price-normalized MACD histogram, 10-day volatility, log 22-day realized volatility, log Parkinson volatility, high-low range, gaps from the 10/20/50-day averages, overnight open gap, day of week sin/cos) and 3 market features (SPY log return, log VIX level and its daily change) | a compact set that covers price, volume, momentum, volatility and trend, built only from past values |
 | Targets | Next-day log return; log of 5-day realized volatility | log returns are additive and roughly stationary; the log of volatility is closer to normal, which suits an MSE/Huber loss |
 | Windows and split | Sliding windows of 40 days; 70/15/15 chronological train/validation/test; scaler fit on train only | shuffling would leak the future into training; time order is kept |
 | Model | `nn.LSTM(7 → 32, 1 layer)`, dropout 0.2, linear head | a small model for roughly 3,000 noisy training samples; a larger one would mostly memorize noise |
