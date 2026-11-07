@@ -34,29 +34,32 @@ models, Transformers.
 
 ## 3. Results
 
-Source: `outputs/AAPL_lstm_vol/results.json` and `outputs/AAPL_lstm/results.json`.
+<!-- RESULTS:START -->
+Source: `outputs/AAPL_lstm_vol/results.json` and `outputs/AAPL_lstm/results.json` (auto-generated).
 
 ### Volatility (log units)
 
 | | RMSE | MAE | R² | Correlation |
 |---|---|---|---|---|
-| **MODEL** | **0.516** | **0.405** | **0.076** | **0.337** |
-| TRAIN_MEAN | 0.537 | 0.417 | 0.000 | – |
-| TRAILING_5D | 0.672 | 0.526 | -0.569 | 0.209 |
-
-The model beats both baselines, but the gain is small. Volatility level is the same in training and test (-4.34 vs
--4.36), so there is no level shift.
+| **MODEL** | **0.499** | **0.398** | **0.129** | **0.368** |
+| TRAIN_MEAN | 0.535 | 0.416 | 0.000 | -0.000 |
+| TRAILING_5D | 0.666 | 0.520 | -0.551 | 0.221 |
 
 ### Return
 
 | | Return RMSE | Return MAE | Direction correct % |
 |---|---|---|---|
-| **MODEL** | 0.017588 | 0.011786 | 55.7 |
-| ZERO (tomorrow = today) | 0.017615 | 0.011857 | – |
-| TRAIN_MEAN | 0.017575 | 0.011762 | 56.2 |
-| ALWAYS_UP | 0.017615 | 0.011857 | 56.2 |
+| **MODEL** | 0.017555 | 0.011803 | 55.6 |
+| ZERO (tomorrow = today) | 0.017594 | 0.011865 | – |
+| TRAIN_MEAN | 0.017568 | 0.011790 | 55.2 |
+| ALWAYS_UP | 0.017594 | 0.011865 | 55.2 |
 
-- Direction right on 347 of 623 days. Always "up" gives 56.2%. Binomial test p = 0.61: no evidence of skill.
+Direction right on 345 of 621 days. Always "up" gives 55.2%. Binomial test p = 0.45.
+<!-- RESULTS:END -->
+
+The model beats both baselines, but the gain is small. Volatility level is the same in training and test (-4.34 vs
+-4.36), so there is no level shift.
+
 - Not better than the training average on RMSE or MAE. The small price error (MAPE about 1.18%) equals the "tomorrow =
   today" baseline, so it reflects small daily moves, not skill.
 - Losses stay at the "predict the average" level and training stops early (15 epochs): there is nothing to learn.

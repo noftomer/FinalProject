@@ -22,6 +22,7 @@ from src.evaluate import (baseline_metrics, direction_significance, plot_all, pl
                           regression_metrics, volatility_metrics)
 from src.features import add_features
 from src.models import build_model
+from src.report import update_report
 from src.train import fit
 
 TARGETS = ["return", "volatility"]
@@ -160,6 +161,7 @@ def main() -> None:
             train_and_evaluate(cfg, a.refresh)
         else:
             predict_next_day(cfg)
+    update_report(a.ticker)
 
 
 if __name__ == "__main__":
