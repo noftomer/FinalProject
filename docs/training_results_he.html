@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>פרשנות תוצאות האימון</title>
+<style>
+  :root { --bg:#fff; --fg:#1b2430; --accent:#1d4ed8; --muted:#5b6675; --line:#d6deea; --soft:#eff4ff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#10151d; --fg:#e6ebf2; --accent:#6ea0ff; --muted:#9aa6b6; --line:#2a3443; --soft:#182235; }
+  }
+  body { background:var(--bg); color:var(--fg); font-family:system-ui,"Segoe UI",Arial,sans-serif; line-height:1.7; max-width:820px; margin:0 auto; padding:24px 16px; text-align:right; direction:rtl; }
+  h1,h2 { color:var(--accent); }
+  h2 { border-bottom:2px solid var(--line); padding-bottom:4px; margin-top:32px; }
+  table { border-collapse:collapse; width:100%; margin:12px 0; direction:rtl; }
+  th,td { border:1px solid var(--line); padding:6px 10px; text-align:right; }
+  th { background:var(--soft); }
+  .box { background:var(--soft); border-right:4px solid var(--accent); padding:10px 14px; border-radius:6px; }
+  .muted { color:var(--muted); }
+  td.num, th.num { direction:ltr; unicode-bidi:plaintext; }
+</style>
+</head>
+<body>
+<h1>מה התוצאות אומרות</h1>
+<p class="box"><b>בקצרה:</b> המודל לא מצליח לחזות את תשואת המחיר של AAPL, אבל כן מצליח לחזות את התנודתיות שלה, ברמה בינונית.</p>
+
+<h2>1. חיזוי תשואה (return): אין יכולת חיזוי</h2>
+<table>
+  <tr><th>מדד</th><th>מודל</th><th>"היום = מחר"</th><th>ממוצע האימון</th></tr>
+  <tr><td>return_rmse</td><td>0.01755</td><td>0.01759</td><td>0.01757</td></tr>
+  <tr><td>דיוק כיוון</td><td>55.6%</td><td>–</td><td>55.2%</td></tr>
+</table>
+<ul>
+  <li><b>Val loss:</b> הטוב ביותר 1.0263 מול בייסליין 1.0276, שיפור של כ-0.1%. המודל בעצם מנבא "בערך הממוצע".</li>
+  <li><b>מול הבייסליינים:</b> ההפרש ב-RMSE כ-0.00004, זניח.</li>
+  <li><b>דיוק כיוון:</b> 55.6% נשמע טוב, אך "תמיד עולה" נותן 55.2%. ה-p-value הוא 0.45, כלומר לא מובהק, וזה מזל ולא יכולת.</li>
+  <li><b>Train מול val:</b> ה-train loss יורד מתחת ל-1.0 וה-val נשאר מעל 1.026, סימן קל ל-overfitting. ה-early stopping עצר באפוך 21 וחזר לאפוך 11.</li>
+</ul>
+<p>המסקנה תואמת את השערת השוק היעיל: תשואות יומיות קרובות לרעש. זה ממצא לגיטימי לדוח.</p>
+
+<h2>2. חיזוי תנודתיות (volatility): יש יכולת חיזוי אמיתית</h2>
+<table>
+  <tr><th>מדד</th><th>מודל</th><th>ממוצע האימון</th><th>TRAILING_5D</th></tr>
+  <tr><td>RMSE</td><td><b>0.499</b></td><td>0.535</td><td>0.666</td></tr>
+  <tr><td>MAE</td><td><b>0.398</b></td><td>0.416</td><td>0.520</td></tr>
+  <tr><td>R²</td><td><b>0.129</b></td><td>0</td><td>−0.55</td></tr>
+  <tr><td>קורלציה</td><td><b>0.368</b></td><td>–</td><td>0.221</td></tr>
+</table>
+<ul>
+  <li><b>Val loss</b> ירד מ-0.835 ל-0.522, שיפור גדול ויציב.</li>
+  <li>המודל מנצח את שני הבייסליינים, כולל TRAILING_5D, ולכן יש כאן skill אמיתי.</li>
+  <li><b>R² = 0.13:</b> כ-13% מהשונות בלוג-התנודתיות מוסברת. שיפור אמיתי אך צנוע.</li>
+  <li><b>קורלציה 0.37:</b> קשר חיובי ברור בין החיזוי למציאות.</li>
+  <li>TRAILING_5D גרוע מהממוצע (R² שלילי), כלומר המודל לומד משהו מעבר ל"העתק את העבר הקרוב".</li>
+  <li>Train loss גבוה מ-val loss (0.71 מול 0.52): סביר שתקופת הוולידציה רגועה יותר, ובנוסף יש dropout באימון.</li>
+</ul>
+<p><b>למה זה הגיוני:</b> בתנודתיות יש volatility clustering, כלומר ימים סוערים באים בקבוצות, ולכן היא ניתנת לחיזוי חלקי בניגוד לכיוון המחיר.</p>
+
+<h2>הסתייגויות לדוח</h2>
+<ul>
+  <li>הבייסליין של ה-val (0.835) גבוה מזה של ה-test (0.535), כלומר משטר השוק משתנה בין התקופות.</li>
+  <li>ההרצה היא על מניה אחת ו-seed אחד. כדאי להריץ כמה seeds ולהוסיף SPY.</li>
+  <li>המדדים הם במרחב לוג-תנודתיות ולא באחוזים ישירים.</li>
+</ul>
+</body>
+</html>

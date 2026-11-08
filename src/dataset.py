@@ -41,12 +41,14 @@ def _split(X: np.ndarray, ends: pd.DataFrame, lo: int, hi: int) -> Split:
     return Split(X[lo:hi], rows["target"].values, rows.index, rows["Close"].values, rows["vol_trailing"].values)
 
 
-def prepare(df: pd.DataFrame, seq_len: int, val_ratio: float, test_ratio: float) -> Prepared:
+def prepare(df: pd.DataFrame, seq_len: int, val_ratio: float, test_ratio: float,
+            cols: list[str] | None = None) -> Prepared:
     """Split labeled windows chronologically into train/val/test; the scaler never sees val or test rows.
 
     A window may reach back into an earlier split (past data only), but its label never does.
+    ``cols`` overrides the input columns (used by the feature ablation); default is ``feature_cols(df)``.
     """
-    cols = feature_cols(df)
+    cols = list(cols) if cols is not None else feature_cols(df)
     df = df.dropna(subset=cols)
     if len(df) < seq_len:
         raise ValueError(f"Not enough usable history: {len(df)} valid rows, but the window needs {seq_len} "

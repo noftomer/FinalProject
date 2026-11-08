@@ -42,7 +42,7 @@ Source: `outputs/AAPL_lstm_vol/results.json` and `outputs/AAPL_lstm/results.json
 | | RMSE | MAE | R² | Correlation |
 |---|---|---|---|---|
 | **MODEL** | **0.499** | **0.398** | **0.129** | **0.368** |
-| TRAIN_MEAN | 0.535 | 0.416 | 0.000 | -0.000 |
+| TRAIN_MEAN | 0.535 | 0.416 | 0.000 | – |
 | TRAILING_5D | 0.666 | 0.520 | -0.551 | 0.221 |
 
 ### Return
