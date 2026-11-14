@@ -141,7 +141,7 @@ def predict_next_day(cfg: Config) -> None:
 def main() -> None:
     """Parse command-line arguments, build the Config, and dispatch to train or predict."""
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("command", nargs="?", default="train", choices=["train", "predict"],
+    p.add_argument("command", nargs="?", default="predict", choices=["train", "predict"],
                    help="what to run (default: train)")
     p.add_argument("--ticker", default=Config.ticker)
     p.add_argument("--start", default=Config.start)

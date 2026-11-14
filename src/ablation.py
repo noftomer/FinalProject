@@ -10,10 +10,14 @@ import argparse
 import contextlib
 import io
 import json
+import multiprocessing as mp
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 
 import numpy as np
 import pandas as pd
+import torch
 from scipy.optimize import minimize
 from sklearn.linear_model import Ridge
 
@@ -90,7 +94,19 @@ def garch_forecast(params: np.ndarray, r_all: np.ndarray, h: int = VOL_HORIZON) 
 
 
 # ---------------------------------------------------------------- experiment
-def run(ticker: str, seeds: int, epochs: int) -> dict:
+def _train_job(job: tuple) -> tuple:
+    """Train one (variant, seed) model and score it on validation. Top-level so worker processes can run it."""
+    name, cols, s, df, cfg, train_mean = job
+    if mp.parent_process() is not None:   # in a worker: avoid CPU oversubscription between processes
+        torch.set_num_threads(1)
+    data = prepare(df, cfg.seq_len, cfg.val_ratio, cfg.test_ratio, cols)
+    with contextlib.redirect_stdout(io.StringIO()):   # silence per-epoch logging
+        model, hist = fit(data.train.X, data.train.y, data.val.X, data.val.y, replace(cfg, seed=s))
+    m = val_metrics(data.val.y, model.predict(data.val.X), train_mean)
+    return name, s, m, hist["best_epoch"], len(hist["val_loss"]), min(hist["val_loss"])
+
+
+def run(ticker: str, seeds: int, epochs: int, workers: int) -> dict:
     cfg = Config(ticker=ticker, target="volatility", epochs=epochs)
     prices = load_prices(cfg.ticker, cfg.start, cfg.end, cfg.data_dir)
     df = add_features(prices, "volatility", load_market(cfg.start, cfg.end, cfg.data_dir))
@@ -107,17 +123,26 @@ def run(ticker: str, seeds: int, epochs: int) -> dict:
     print(f"{ticker}: train {len(y_train)} | val {len(y_val)} "
           f"({ref.val.dates[0].date()} -> {ref.val.dates[-1].date()}) | test NOT used")
 
-    for name, cols in variants.items():
-        data = prepare(df, cfg.seq_len, cfg.val_ratio, cfg.test_ratio, cols)
-        per_seed[name] = []
-        for s in range(seeds):
-            #with contextlib.redirect_stdout(io.StringIO()):   # silence per-epoch logging
-            model, hist = fit(data.train.X, data.train.y, data.val.X, data.val.y, replace(cfg, seed=s))
-            m = val_metrics(data.val.y, model.predict(data.val.X), train_mean)
-            per_seed[name].append(m)
-            print(f"  {name:<38} seed {s + 1}/{seeds} | best epoch {hist['best_epoch']:>3}/{len(hist['val_loss'])} "
-                  f"| val loss {min(hist['val_loss']):.4f} | val RMSE {m['rmse']:.4f}")
-        print(f"  done: {name}")
+    # Every (variant, seed) pair is an independent, seeded training run, so they can run in parallel
+    # without changing any result; only the order of the printed lines differs.
+    jobs = [(name, cols, s, df, cfg, train_mean) for name, cols in variants.items() for s in range(seeds)]
+    workers = max(1, min(workers, len(jobs)))
+    per_seed = {name: [None] * seeds for name in variants}
+    print(f"Running {len(jobs)} trainings on {workers} worker process(es)")
+
+    def _record(res):
+        name, s, m, best_epoch, n_epochs, val_loss = res
+        per_seed[name][s] = m
+        print(f"  {name:<38} seed {s + 1}/{seeds} | best epoch {best_epoch:>3}/{n_epochs} "
+              f"| val loss {val_loss:.4f} | val RMSE {m['rmse']:.4f}", flush=True)
+
+    if workers == 1:
+        for job in jobs:
+            _record(_train_job(job))
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            for fut in as_completed([ex.submit(_train_job, job) for job in jobs]):
+                _record(fut.result())
     for name, lst in per_seed.items():
         rows[name] = {f"{m}_{agg}": float(getattr(np, agg)([x[m] for x in lst]))
                       for m in ("rmse", "r2", "corr") for agg in ("mean", "std")}
@@ -164,8 +189,10 @@ if __name__ == "__main__":
     p.add_argument("--ticker", default="AAPL")
     p.add_argument("--seeds", type=int, default=5)
     p.add_argument("--epochs", type=int, default=100)
+    p.add_argument("--workers", type=int, default=os.cpu_count() or 1,
+                   help="parallel training processes (default: all CPU cores; 1 = sequential)")
     a = p.parse_args()
-    out = run(a.ticker, a.seeds, a.epochs)
+    out = run(a.ticker, a.seeds, a.epochs, a.workers)
     path = Config().output_dir / f"{a.ticker}_ablation" / "ablation_val.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, indent=2))   # save first so a printing problem can't lose the results

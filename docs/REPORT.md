@@ -41,20 +41,20 @@ Source: `outputs/AAPL_lstm_vol/results.json` and `outputs/AAPL_lstm/results.json
 
 | | RMSE | MAE | R² | Correlation |
 |---|---|---|---|---|
-| **MODEL** | **0.499** | **0.398** | **0.129** | **0.368** |
-| TRAIN_MEAN | 0.535 | 0.416 | 0.000 | – |
-| TRAILING_5D | 0.666 | 0.520 | -0.551 | 0.221 |
+| **MODEL** | **0.501** | **0.400** | **0.120** | **0.360** |
+| TRAIN_MEAN | 0.534 | 0.414 | 0.000 | – |
+| TRAILING_5D | 0.667 | 0.521 | -0.562 | 0.220 |
 
 ### Return
 
 | | Return RMSE | Return MAE | Direction correct % |
 |---|---|---|---|
-| **MODEL** | 0.017555 | 0.011803 | 55.6 |
-| ZERO (tomorrow = today) | 0.017594 | 0.011865 | – |
-| TRAIN_MEAN | 0.017568 | 0.011790 | 55.2 |
-| ALWAYS_UP | 0.017594 | 0.011865 | 55.2 |
+| **MODEL** | 0.017580 | 0.011856 | 55.0 |
+| ZERO (tomorrow = today) | 0.017624 | 0.011913 | – |
+| TRAIN_MEAN | 0.017595 | 0.011839 | 55.0 |
+| ALWAYS_UP | 0.017624 | 0.011913 | 55.0 |
 
-Direction right on 345 of 621 days. Always "up" gives 55.2%. Binomial test p = 0.45.
+Direction right on 342 of 622 days. Always "up" gives 55.0%. Binomial test p = 0.52.
 <!-- RESULTS:END -->
 
 The model beats both baselines, but the gain is small. Volatility level is the same in training and test (-4.34 vs
