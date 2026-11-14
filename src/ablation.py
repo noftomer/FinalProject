@@ -111,9 +111,12 @@ def run(ticker: str, seeds: int, epochs: int) -> dict:
         data = prepare(df, cfg.seq_len, cfg.val_ratio, cfg.test_ratio, cols)
         per_seed[name] = []
         for s in range(seeds):
-            with contextlib.redirect_stdout(io.StringIO()):   # silence per-epoch logging
-                model, hist = fit(data.train.X, data.train.y, data.val.X, data.val.y, replace(cfg, seed=s))
-            per_seed[name].append(val_metrics(data.val.y, model.predict(data.val.X), train_mean))
+            #with contextlib.redirect_stdout(io.StringIO()):   # silence per-epoch logging
+            model, hist = fit(data.train.X, data.train.y, data.val.X, data.val.y, replace(cfg, seed=s))
+            m = val_metrics(data.val.y, model.predict(data.val.X), train_mean)
+            per_seed[name].append(m)
+            print(f"  {name:<38} seed {s + 1}/{seeds} | best epoch {hist['best_epoch']:>3}/{len(hist['val_loss'])} "
+                  f"| val loss {min(hist['val_loss']):.4f} | val RMSE {m['rmse']:.4f}")
         print(f"  done: {name}")
     for name, lst in per_seed.items():
         rows[name] = {f"{m}_{agg}": float(getattr(np, agg)([x[m] for x in lst]))

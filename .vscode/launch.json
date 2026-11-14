@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: ablation (AAPL)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.ablation",
+            "args": ["--ticker", "AAPL", "--seeds", "5"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: current file (as module in src)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.${fileBasenameNoExtension}",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}
